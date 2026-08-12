@@ -1,0 +1,16 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: sparkle-audio-data
+  namespace: sparkle-audio
+  labels:
+    app.kubernetes.io/name: sparkle-audio
+spec:
+  # SQLite (WAL) must have a single writer and a real local filesystem — use
+  # ReadWriteOnce. This effectively pins the app to ONE replica (see README).
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 10Gi
+  # storageClassName: ""  # set to a class that provisions RWO block storage

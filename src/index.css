@@ -1,0 +1,94 @@
+@import "tailwindcss";
+
+@theme {
+  --color-accent: #f5f5f5;
+  --color-surface-deep: #0a0a0a;
+  --color-surface-raised: #171717;
+  --color-line: #262626;
+}
+
+@layer base {
+  html {
+    color-scheme: dark;
+  }
+  body {
+    @apply bg-neutral-950 text-neutral-50 antialiased;
+  }
+}
+
+/* Tactile press feedback for interactive elements (strict, no decoration) */
+@utility press {
+  transition:
+    color 0.15s ease,
+    background-color 0.15s ease,
+    border-color 0.15s ease,
+    transform 0.15s ease;
+  &:active {
+    transform: scale(0.96);
+  }
+}
+
+/* Minimal monochrome scrollbar */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: #262626;
+  border-radius: 999px;
+  border: 2px solid #0a0a0a;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #404040;
+}
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #262626 transparent;
+}
+
+/* Range inputs (hiding native appearance; overlay tracks are custom) */
+input[type="range"] {
+  -webkit-appearance: none;
+  appearance: none;
+  background: transparent;
+}
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+}
+input[type="range"]::-moz-range-thumb {
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+}
+input[type="range"]::-moz-range-track {
+  background: transparent;
+}
+
+/* Sparkle hero decorations — inert when the user prefers reduced motion.
+   Everything (keyframes, initial states, fade-up gradient) lives inside the
+   no-preference query so reduced-motion users never see hidden elements. */
+@media (prefers-reduced-motion: no-preference) {
+  @keyframes sf-fade-up {
+    from {
+      opacity: 0;
+      transform: translateY(12px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  /* Staggered rise-in for hero blocks (opacity + delay live here too). */
+  .sf-fade-up {
+    opacity: 0;
+    animation: sf-fade-up 0.55s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+  }
+}

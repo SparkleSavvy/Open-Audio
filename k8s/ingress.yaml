@@ -1,0 +1,32 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: sparkle-audio
+  namespace: sparkle-audio
+  labels:
+    app.kubernetes.io/name: sparkle-audio
+  annotations:
+    # nginx-ingress: raise the body limit so 60 MB track uploads get through.
+    nginx.ingress.kubernetes.io/proxy-body-size: "64m"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "300"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "300"
+    # TLS is terminated at the Ingress; the app sits behind it on HTTP.
+    # Uncomment to use cert-manager for automatic certificates:
+    # cert-manager.io/cluster-issuer: "letsencrypt-prod"
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts:
+        - audio.example.com
+      secretName: sparkle-audio-tls
+  rules:
+    - host: audio.example.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: sparkle-audio
+                port:
+                  name: http

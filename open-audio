@@ -1,0 +1,505 @@
+#!/usr/bin/env bash
+#
+# open-audio — системная утилита управления проектом
+#
+# Управляет жизненным циклом приложения на Linux: установка, запуск, остановка,
+# обновление, настройка, бэкап/восстановление, удаление. Поддерживает два
+# режима развёртывания:
+#   native  — запуск напрямую на хосте (Node + systemd или nohup)
+#   docker  — запуск в контейнере (образ собирается локально)
+#
+# Утилита дополняет app-уровневые скрипты (npm run setup / npm run admin),
+# добавляя именно системный слой: сервис, процесс, тома, env, статусы.
+#
+# Использование:  ./open-audio <команда> [опции]
+#   install               установить зависимости/образ и (опционально) сервис
+#   start                 запустить
+#   stop                  остановить
+#   restart               перезапустить
+#   status                статус + здоровье
+#   health                проверить /api/health
+#   logs [--follow|-f]    показать логи
+#   config ...            управление .env (list|get|set|edit|secret|removal-key)
+#   update                обновить код/образ и перезапустить
+#   backup [dir]          бэкап БД + uploads (через admin CLI)
+#   restore <dir>         восстановление из бэкапа
+#   admin <args...>       проброс в admin CLI
+#   uninstall [--purge]   снять сервис/контейнер (--purge удаляет данные)
+#   remove [--yes] [прич] полный снос сервера (flow удаления приложения)
+#   mode <native|docker>  переключить режим развёртывания
+#   self-install          симлинк в /usr/local/bin/open-audio
+#   version               версия утилиты
+#   help                  справка
+#
+set -euo pipefail
+
+PROG="open-audio"
+VERSION="1.0.0"
+
+# --- расположение ----------------------------------------------------------
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_DIR="$SCRIPT_DIR"
+STATE_FILE="$PROJECT_DIR/.open-audio-state"
+ENV_FILE="$PROJECT_DIR/.env"
+LOG_DIR="$PROJECT_DIR/logs"
+LOG_FILE="$LOG_DIR/server.log"
+PID_FILE="$PROJECT_DIR/.open-audio.pid"
+DOCKER_ENV="$PROJECT_DIR/.open-audio.docker.env"
+SYSTEMD_UNIT="/etc/systemd/system/open-audio.service"
+
+DEFAULT_PORT=4000
+DEFAULT_DATA_DIR="$PROJECT_DIR/data"
+
+# --- состояние (переопределяется из STATE_FILE) ----------------------------
+MODE="native"
+PORT="$DEFAULT_PORT"
+DATA_DIR="$DEFAULT_DATA_DIR"
+SERVICE="open-audio"
+IMAGE="open-audio:latest"
+CONTAINER="open-audio"
+VOLUME="open-audio-data"
+
+# --- цвета -----------------------------------------------------------------
+if [ -t 1 ]; then
+  C_R=$'\033[31m'; C_G=$'\033[32m'; C_Y=$'\033[33m'; C_B=$'\033[34m'; C_RST=$'\033[0m'
+else
+  C_R=""; C_G=""; C_Y=""; C_B=""; C_RST=""
+fi
+
+info()  { printf '%s•%s %s\n' "$C_G" "$C_RST" "$*"; }
+warn()  { printf '%s!%s %s\n' "$C_Y" "$C_RST" "$*"; }
+err()   { printf '%s✗%s %s\n' "$C_R" "$C_RST" "$*" >&2; }
+die()   { err "$*"; exit 1; }
+
+# ---------------------------------------------------------------------------
+# утилитарное
+# ---------------------------------------------------------------------------
+need_cmd() { command -v "$1" >/dev/null 2>&1 || die "требуется команда: $1"; }
+
+load_state() {
+  # значения по умолчанию уже заданы; state-файл лишь переопределяет их
+  [ -f "$STATE_FILE" ] && source "$STATE_FILE" || true
+  # В native-режиме сервер читает PORT из .env — сделаем его источником
+  # истины для status/health, иначе они расходятся после `config set PORT`.
+  if [ "${MODE:-native}" != "docker" ]; then
+    local p; p="$(env_get PORT 2>/dev/null || true)"
+    [ -n "$p" ] && PORT="$p"
+  fi
+}
+
+guard_docker() { [ "${MODE:-native}" = "docker" ] && need_cmd docker || true; }
+
+save_state() {
+  cat > "$STATE_FILE" <<EOF
+# сгенерировано утилитой open-audio — не редактируйте вручную
+MODE="$MODE"
+PORT="$PORT"
+DATA_DIR="$DATA_DIR"
+SERVICE="$SERVICE"
+IMAGE="$IMAGE"
+CONTAINER="$CONTAINER"
+VOLUME="$VOLUME"
+EOF
+}
+
+# Извлечь значение ключа из .env (без подгрузки в текущий shell)
+env_get() {
+  local key="$1" f="${2:-$ENV_FILE}"
+  [ -f "$f" ] || return 1
+  local line
+  line="$(grep -E "^${key}=" "$f" | tail -n1)" || return 1
+  printf '%s' "${line#*=}"
+}
+
+# Установить/обновить ключ в .env
+env_set() {
+  local key="$1" val="$2" f="$ENV_FILE"
+  mkdir -p "$(dirname "$f")"
+  if [ -f "$f" ] && grep -qE "^${key}=" "$f"; then
+    local esc; esc="$(printf '%s' "$val" | sed 's/[&/\]/\\&/g')"
+    sed -i.bak -E "s|^${key}=.*|${key}=${esc}|" "$f" && rm -f "$f.bak"
+  else
+    printf '%s=%s\n' "$key" "$val" >> "$f"
+  fi
+}
+
+mask() { [ -z "$1" ] && printf '(пусто)' || printf '%.6s…%s' "$1" "$(printf '%s' "$1" | tail -c 4)"; }
+
+require_root() { [ "$(id -u)" -eq 0 ] || die "этой команде нужны права root (sudo)"; }
+
+have_systemd() { [ -d /run/systemd/system ] && command -v systemctl >/dev/null 2>&1; }
+
+node_bin() { command -v node || die "node не найден"; }
+tsx_bin()  { [ -x "$PROJECT_DIR/node_modules/.bin/tsx" ] && printf '%s/node_modules/.bin/tsx' "$PROJECT_DIR" || die "tsx не найден (запустите install)"; }
+
+# ---------------------------------------------------------------------------
+# health / запуск приложения
+# ---------------------------------------------------------------------------
+health_url() { printf 'http://127.0.0.1:%s/api/health' "$PORT"; }
+
+health_check() {
+  local url; url="$(health_url)"
+  if command -v curl >/dev/null 2>&1; then
+    curl -fsS --max-time 5 "$url" >/dev/null 2>&1
+  else
+    node -e "fetch('$url').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+  fi
+}
+
+# ---- native ----
+native_running() {
+  if have_systemd && systemctl list-unit-files "${SERVICE}.service" >/dev/null 2>&1; then
+    [ "$(systemctl is-active "${SERVICE}.service" 2>/dev/null)" = "active" ]
+    return $?
+  fi
+  [ -f "$PID_FILE" ] && kill -0 "$(cat "$PID_FILE")" 2>/dev/null
+}
+
+native_start() {
+  if native_running; then warn "уже запущено"; return 0; fi
+  mkdir -p "$LOG_DIR" "$DATA_DIR"
+  local nb; nb="$(node_bin)"; local tb; tb="$(tsx_bin)"
+  info "запуск (native)…"
+  nohup "$nb" "$tb" server/index.ts > "$LOG_FILE" 2>&1 &
+  echo $! > "$PID_FILE"
+  sleep 2
+  if native_running; then info "запущено, PID $(cat "$PID_FILE")"; else err "не удалось запустить — см. $LOG_FILE"; return 1; fi
+}
+
+native_stop() {
+  if have_systemd && systemctl list-unit-files "${SERVICE}.service" >/dev/null 2>&1; then
+    systemctl stop "${SERVICE}.service" 2>/dev/null || true
+  fi
+  if [ -f "$PID_FILE" ]; then
+    local pid; pid="$(cat "$PID_FILE")"
+    if kill -0 "$pid" 2>/dev/null; then
+      info "остановка (PID $pid)…"
+      kill "$pid" 2>/dev/null || true
+      for _ in $(seq 1 20); do kill -0 "$pid" 2>/dev/null || break; sleep 0.5; done
+      kill -9 "$pid" 2>/dev/null || true
+    fi
+    rm -f "$PID_FILE"
+  fi
+}
+
+# ---- docker ----
+docker_env_file() {
+  # собираем env для контейнера: фиксируем пути внутри контейнера (/data)
+  # и пробрасываем секреты/owner из хостового .env
+  cat > "$DOCKER_ENV" <<EOF
+NODE_ENV=production
+PORT=4000
+DATABASE_PATH=/data/open-audio.db
+UPLOAD_DIR=/data/uploads
+COOKIE_SECURE=1
+TRUST_PROXY=1
+HELMET_CSP=${HELMET_CSP:-1}
+EOF
+  if [ -f "$ENV_FILE" ]; then
+    grep -E '^(JWT_SECRET|REMOVAL_KEY|OWNER_USERNAME|OWNER_PASSWORD|OWNER_EMAIL|APP_URL)=' "$ENV_FILE" >> "$DOCKER_ENV" || true
+  fi
+  printf '%s' "$DOCKER_ENV"
+}
+
+docker_running() { docker ps -q --filter "name=^${CONTAINER}$" | grep -q . ; }
+
+docker_run() {
+  need_cmd docker
+  local envf; envf="$(docker_env_file)"
+  docker volume create "$VOLUME" >/dev/null
+  docker run -d --name "$CONTAINER" --restart unless-stopped \
+    -p "${PORT}:4000" \
+    --env-file "$envf" \
+    -v "${VOLUME}:/data" \
+    "$IMAGE"
+}
+
+docker_start() {
+  need_cmd docker
+  if docker_running; then warn "уже запущен"; return 0; fi
+  if ! docker image inspect "$IMAGE" >/dev/null 2>&1; then
+    die "образ $IMAGE не собран — выполните install"
+  fi
+  info "запуск (docker)…"
+  docker_run
+  sleep 2
+  docker_running && info "контейнер $CONTAINER запущен" || err "не удалось запустить контейнер"
+}
+
+docker_stop() {
+  need_cmd docker
+  docker stop "$CONTAINER" >/dev/null 2>&1 || true
+  docker rm -f "$CONTAINER" >/dev/null 2>&1 || true
+}
+
+# ---- общие обёртки ----
+app_running() { [ "$MODE" = "docker" ] && docker_running || native_running; }
+
+app_start() {
+  if [ "$MODE" = "docker" ]; then docker_start; else native_start; fi
+}
+app_stop() {
+  if [ "$MODE" = "docker" ]; then docker_stop; else native_stop; fi
+}
+
+# выполнить admin CLI (прямо на хосте или внутри контейнера)
+admin_cli() {
+  if [ "$MODE" = "docker" ]; then
+    need_cmd docker
+    docker exec "$CONTAINER" npm run admin -- "$@"
+  else
+    need_cmd npm
+    npm run admin -- "$@"
+  fi
+}
+
+# ---------------------------------------------------------------------------
+# команды
+# ---------------------------------------------------------------------------
+cmd_install() {
+  local use_service=0
+  for a in "$@"; do [ "$a" = "--service" ] && use_service=1; done
+
+  if [ "$MODE" = "docker" ]; then
+    need_cmd docker
+    info "режим: docker"
+    # убедимся, что .env есть (с секретами)
+    if [ ! -f "$ENV_FILE" ]; then
+      warn ".env не найден — создаю из примера и генерирую секреты"
+      cp "${PROJECT_DIR}/.env.example" "$ENV_FILE"
+      env_set JWT_SECRET "$(openssl rand -hex 32)"
+      env_set REMOVAL_KEY "$(openssl rand -base64 24)"
+    fi
+    info "сборка образа $IMAGE …"
+    docker build -t "$IMAGE" "$PROJECT_DIR"
+    docker_stop 2>/dev/null || true
+    docker_run
+    info "установлено и запущено в docker"
+    return 0
+  fi
+
+  # native
+  info "режим: native"
+  need_cmd node; need_cmd npm
+  info "установка зависимостей (npm ci)…"
+  (cd "$PROJECT_DIR" && npm ci)
+  info "инициализация (npm run setup)…"
+  (cd "$PROJECT_DIR" && npm run setup)
+  mkdir -p "$DATA_DIR"
+
+  if [ "$use_service" -eq 1 ]; then
+    require_root
+    install_systemd
+  else
+    info "сервис systemd не устанавливается (без --service); запуск через nohup"
+  fi
+  app_start
+  info "установлено"
+}
+
+install_systemd() {
+  require_root
+  local nb; nb="$(node_bin)"; local tb; tb="$(tsx_bin)"
+  local run_user; run_user="$(logname 2>/dev/null || echo root)"
+  info "установка systemd-юнита (user=$run_user)…"
+  cat > "$SYSTEMD_UNIT" <<EOF
+[Unit]
+Description=Open Audio
+After=network.target
+
+[Service]
+Type=simple
+User=${run_user}
+WorkingDirectory=${PROJECT_DIR}
+Environment=NODE_ENV=production
+EnvironmentFile=${ENV_FILE}
+ExecStart=${nb} ${tb} server/index.ts
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
+EOF
+  systemctl daemon-reload
+  systemctl enable "${SERVICE}.service"
+  systemctl restart "${SERVICE}.service"
+  info "юнит ${SERVICE}.service установлен и запущен"
+}
+
+cmd_start()   { guard_docker; app_start; }
+cmd_stop()    { guard_docker; app_stop; }
+cmd_restart() { guard_docker; app_stop; sleep 1; app_start; }
+
+cmd_status() {
+  guard_docker
+  echo "режим:        $MODE"
+  echo "порт:         $PORT"
+  echo "данные:       $DATA_DIR"
+  if [ "$MODE" = "docker" ]; then echo "образ:        $IMAGE"; echo "контейнер:    $CONTAINER"; fi
+  if app_running; then
+    info "статус:       запущено"
+    if health_check; then info "здоровье:     OK ($(health_url))"; else warn "здоровье:     НЕТ ответа"; fi
+  else
+    warn "статус:       не запущено"
+  fi
+}
+
+cmd_health() { guard_docker; health_check && { info "OK"; } || { err "нет ответа"; exit 1; }; }
+
+cmd_logs() {
+  guard_docker
+  local follow=""; for a in "$@"; do [ "$a" = "--follow" ] || [ "$a" = "-f" ] && follow="-f"; done
+  if [ "$MODE" = "docker" ]; then
+    need_cmd docker; docker logs $follow "$CONTAINER"
+  elif have_systemd && systemctl list-unit-files "${SERVICE}.service" >/dev/null 2>&1; then
+    journalctl $follow -u "${SERVICE}.service"
+  else
+    [ -f "$LOG_FILE" ] && tail $follow -n 100 "$LOG_FILE" || err "лог-файл не найден"
+  fi
+}
+
+cmd_config() {
+  local sub="${1:-list}"; shift || true
+  case "$sub" in
+    list)
+      [ -f "$ENV_FILE" ] || die ".env не найден — выполните install"
+      info "конфигурация (.env):"
+      while IFS= read -r line; do
+        [ -z "$line" ] && continue
+        case "$line" in \#*) continue;; esac
+        local k="${line%%=*}" v="${line#*=}"
+        case "$k" in JWT_SECRET|REMOVAL_KEY) v="$(mask "$v")";; esac
+        printf '  %-18s %s\n' "$k" "$v"
+      done < "$ENV_FILE"
+      ;;
+    get)  [ -z "${1:-}" ] && die "usage: config get <KEY>"; v="$(env_get "$1")" || die "ключ не найден"; case "$1" in JWT_SECRET|REMOVAL_KEY) v="$(mask "$v")";; esac; printf '%s\n' "$v";;
+    set)
+      [ -z "${1:-}" ] || [ -z "${2:-}" ] && die "usage: config set <KEY> <VALUE>"
+      env_set "$1" "$2"
+      info "установлено $1 (перезапуск)"; cmd_restart
+      ;;
+    edit) ${EDITOR:-vi} "$ENV_FILE"; cmd_restart;;
+    secret)
+      info "ротация JWT_SECRET…"
+      admin_cli secret
+      info "готово (перезапуск)"; cmd_restart
+      ;;
+    removal-key)
+      info "ротация REMOVAL_KEY…"
+      admin_cli removal-key
+      info "готово (перезапуск)"; cmd_restart
+      ;;
+    *) die "неизвестная подкоманда config: $sub";;
+  esac
+}
+
+cmd_update() {
+  guard_docker
+  info "обновление…"
+  if [ "$MODE" = "docker" ]; then
+    need_cmd docker
+    app_stop
+    (cd "$PROJECT_DIR" && docker build -t "$IMAGE" .)
+    docker_run
+    info "обновлено (docker)"
+    return 0
+  fi
+  # native
+  if [ -d "$PROJECT_DIR/.git" ]; then
+    (cd "$PROJECT_DIR" && git pull --ff-only || warn "git pull не выполнен")
+  fi
+  (cd "$PROJECT_DIR" && npm ci && npm run build)
+  cmd_restart
+  info "обновлено (native)"
+}
+
+cmd_backup()   { admin_cli backup "${1:-}"; }
+cmd_restore()  { [ -z "${1:-}" ] && die "usage: restore <dir>"; admin_cli restore "$1" --force; }
+cmd_admin()    { admin_cli "$@"; }
+
+cmd_uninstall() {
+  guard_docker
+  local purge=0
+  for a in "$@"; do [ "$a" = "--purge" ] && purge=1; done
+  info "удаление развёртывания (режим $MODE)…"
+  app_stop
+  if have_systemd && [ -f "$SYSTEMD_UNIT" ]; then
+    require_root
+    systemctl disable "${SERVICE}.service" 2>/dev/null || true
+    rm -f "$SYSTEMD_UNIT"
+    systemctl daemon-reload
+    info "systemd-юнит удалён"
+  fi
+  if [ "$MODE" = "docker" ]; then
+    need_cmd docker
+    docker rm -f "$CONTAINER" >/dev/null 2>&1 || true
+    docker volume rm "$VOLUME" >/dev/null 2>&1 || true
+  fi
+  if [ "$purge" -eq 1 ]; then
+    require_root
+    warn "полная очистка данных: $DATA_DIR, uploads, .env"
+    rm -rf "$DATA_DIR" "$PROJECT_DIR/uploads" "$ENV_FILE" "$STATE_FILE" "$DOCKER_ENV" "$PID_FILE"
+    info "данные удалены"
+  else
+    info "данные сохранены в $DATA_DIR (используйте --purge для удаления)"
+  fi
+}
+
+cmd_remove() {
+  guard_docker
+  local yes=0 reason=""
+  for a in "$@"; do
+    [ "$a" = "--yes" ] && yes=1 || reason="$a"
+  done
+  [ "$yes" -eq 1 ] || die "команда ПОЛНОСТЬЬЮ уничтожает сервер. Повторите с --yes."
+  if ! app_running; then die "приложение не запущено — запустите его перед удалением"; fi
+  warn "инициирую flow полного удаления сервера…"
+  admin_cli remove-server "${reason}"
+  cat <<EOF
+
+${C_Y}Дальше подтвердите удаление в панели администратора:${C_RST}
+  1. Откройте  http://<host>:$PORT/admin  под owner-аккаунтом.
+  2. В разделе removal-запросов подтвердите удаление, введя REMOVAL_KEY.
+  3. Сервер сотрёт БД, uploads, dist и .env и остановится.
+
+Либо выполните подтверждение через API, передав REMOVAL_KEY owner-сессии.
+EOF
+}
+
+cmd_mode() {
+  local m="${1:-}"; [ -z "$m" ] && die "usage: mode <native|docker>"
+  [ "$m" = "native" ] || [ "$m" = "docker" ] || die "режим должен быть native или docker"
+  # при смене режима останавливаем текущий
+  app_stop 2>/dev/null || true
+  MODE="$m"; save_state
+  info "режим переключён на: $MODE (сохранено в $STATE_FILE)"
+}
+
+cmd_self_install() {
+  require_root
+  local target="/usr/local/bin/open-audio"
+  ln -sf "$SCRIPT_DIR/open-audio" "$target"
+  chmod +x "$SCRIPT_DIR/open-audio"
+  info "симлинк создан: $target"
+}
+
+cmd_version() { echo "$PROG $VERSION"; }
+
+cmd_help() {
+  sed -n '2,60p' "${BASH_SOURCE[0]}" | sed 's/^#\{1,2\} //' | sed '/^set -/q'
+  echo
+  echo "Текущий режим: $MODE   (сменить: $PROG mode <native|docker>)"
+}
+
+# ---------------------------------------------------------------------------
+main() {
+  load_state
+  local cmd="${1:-help}"; shift || true
+  case "$cmd" in
+    install|start|stop|restart|status|health|logs|config|update|backup|restore|admin|uninstall|remove|mode|self-install|version|help|-h|--help)
+      "cmd_$cmd" "$@" ;;
+    *) err "неизвестная команда: $cmd"; cmd_help; exit 1 ;;
+  esac
+}
+
+main "$@"

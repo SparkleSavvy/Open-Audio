@@ -1,0 +1,22 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: sparkle-audio
+  namespace: sparkle-audio
+  labels:
+    app.kubernetes.io/name: sparkle-audio
+data:
+  NODE_ENV: "production"
+  PORT: "4000"
+  # Persisted state lives on the PVC mounted at /data.
+  DATABASE_PATH: "/data/open-audio.db"
+  UPLOAD_DIR: "/data/uploads"
+  # Behind an Ingress/LB the real client IP comes from X-Forwarded-For, and the
+  # cookie must be HTTPS-only.
+  COOKIE_SECURE: "1"
+  TRUST_PROXY: "1"
+  HELMET_CSP: "1"
+  # Public base URL of the app (used in notifications / removal requests).
+  APP_URL: "https://audio.example.com"
+  # Owner username created on first boot (password comes from the Secret).
+  OWNER_USERNAME: "owner"

@@ -1,0 +1,45 @@
+# Raw Docker host deployment (single node).
+#
+# Usage:
+#   cp .env.example .env       # fill JWT_SECRET, REMOVAL_KEY, OWNER_PASSWORD, …
+#   docker compose up -d --build
+#
+# State (SQLite DB + uploads) persists in the `sparkle-data` volume.
+# The app serves both the SPA and the API on port 4000.
+#
+# Secrets are passed via the env_file (your .env). Generate strong values:
+#   JWT_SECRET=$(openssl rand -hex 32)
+#   REMOVAL_KEY=$(openssl rand -base64 24)
+#
+# NOTE: This is a single-instance deployment. SQLite + the in-memory rate
+# limiter do not work across multiple containers — see README "Scaling".
+
+services:
+  app:
+    build: .
+    image: sparkle-audio:latest
+    container_name: sparkle-audio
+    restart: unless-stopped
+    ports:
+      - "4000:4000"
+    env_file:
+      - .env
+    environment:
+      NODE_ENV: production
+      PORT: "4000"
+      DATABASE_PATH: /data/open-audio.db
+      UPLOAD_DIR: /data/uploads
+      COOKIE_SECURE: "1"
+      TRUST_PROXY: "1"
+      HELMET_CSP: "1"
+    volumes:
+      - sparkle-data:/data
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:4000/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+
+volumes:
+  sparkle-data:
