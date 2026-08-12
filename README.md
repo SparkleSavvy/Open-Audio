@@ -71,6 +71,61 @@ OWNER_PASSWORD=TestPass123
 OWNER_EMAIL=owner@example.com
 ```
 
+## Quick install on a Linux server
+
+Run Open Audio on a single Linux host (Ubuntu/Debian). Requires **Node.js 22.5+**
+(Node 24+ recommended) and `git`; Docker is optional.
+
+### 1. Download the project
+
+```bash
+git clone https://github.com/SparkleSavvy/Open-Audio.git
+cd Open-Audio
+```
+
+(or download a release tarball and extract it).
+
+### 2a. Install with the `open-audio` utility (recommended)
+
+The bundled `open-audio` bash script manages the whole lifecycle (dependencies,
+`.env`, systemd service, backups). Install it system-wide, then provision and
+start the service:
+
+```bash
+chmod +x open-audio
+sudo ./open-audio self-install            # symlink -> /usr/local/bin/open-audio
+sudo open-audio install --service         # deps + owner account + systemd unit
+sudo open-audio config set JWT_SECRET "$(openssl rand -hex 32)"
+sudo open-audio config set REMOVAL_KEY "$(openssl rand -base64 24)"
+sudo open-audio config set OWNER_PASSWORD "change-me"
+sudo open-audio start
+sudo open-audio status                    # mode, port, health
+```
+
+The server listens on `:4000`. Put a reverse proxy (nginx/Caddy) in front for
+HTTPS and set `COOKIE_SECURE=1` / `TRUST_PROXY=1` via
+`sudo open-audio config set ...`.
+
+### 2b. Install with npm
+
+```bash
+npm install
+npm run setup                             # .env + SQLite DB + owner account
+# edit .env: set JWT_SECRET, REMOVAL_KEY, OWNER_PASSWORD, NODE_ENV=production
+npm run build
+npm start                                 # single server on :4000 (SPA + API + files)
+```
+
+`npm run setup` creates `.env` from `.env.example` and prints the owner
+credentials and removal key. Rotate them later with `npm run admin secret` /
+`npm run admin removal-key`.
+
+### 3. Open it
+
+Point a browser (or your reverse proxy) at `http://<server>:4000`. The service
+starts empty — upload a track via `/upload` and verify it in the `/admin`
+**Moderation** tab.
+
 ## How moderation works
 
 1. A user registers and uploads a track (`/upload`) — title, artist, duration, and cover are filled from the file's metadata automatically (they can be overridden); the track gets the `pending` status.
