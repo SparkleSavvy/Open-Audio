@@ -83,8 +83,6 @@ git clone https://github.com/SparkleSavvy/Open-Audio.git
 cd Open-Audio
 ```
 
-(or download a release tarball and extract it).
-
 ### 2a. Install with the `open-audio` utility (recommended)
 
 The bundled `open-audio` bash script manages the whole lifecycle (dependencies,
