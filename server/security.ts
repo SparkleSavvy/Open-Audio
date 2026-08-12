@@ -144,8 +144,8 @@ const AUDIO_SIGNATURES: Signature[] = [
   { type: 'ogg', matches: (b) => prefix(b, 0, [0x4f, 0x67, 0x67, 0x53]) }, // "OggS"
   { type: 'wav', matches: (b) => prefix(b, 0, [0x52, 0x49, 0x46, 0x46]) && prefix(b, 8, [0x57, 0x41, 0x56, 0x45]) }, // "RIFF" + "WAVE"
   { type: 'm4a', matches: (b) => prefix(b, 4, [0x66, 0x74, 0x79, 0x70]) }, // "ftyp"
+  { type: 'aac', matches: (b) => b.length > 1 && b[0] === 0xff && (b[1] & 0xf6) === 0xf0 }, // ADTS sync (0xFF F0-F7; must precede MPEG, same prefix)
   { type: 'mp3', matches: (b) => masked(b, 0, 0xe0, 0xe0) }, // MPEG audio sync
-  { type: 'aac', matches: (b) => masked(b, 0, 0xf6, 0xf0) }, // ADTS sync
   { type: 'webm', matches: (b) => prefix(b, 0, [0x1a, 0x45, 0xdf, 0xa3]) }, // EBML header
 ];
 

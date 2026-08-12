@@ -4,7 +4,6 @@ let gainNode: GainNode | null = null;
 let source: MediaElementAudioSourceNode | null = null;
 let attachedEl: HTMLAudioElement | null = null;
 let working = false;
-let currentGain = 1;
 let unlockScheduled = false;
 
 function ensureCtx(): AudioContext | null {
@@ -37,7 +36,7 @@ function connectOutput() {
   if (!c || !source) return;
   if (!gainNode) {
     gainNode = c.createGain();
-    gainNode.gain.value = currentGain;
+    gainNode.gain.value = 1;
   }
   try {
     source.connect(gainNode);
@@ -45,11 +44,6 @@ function connectOutput() {
   } catch {
     /* ignore */
   }
-}
-
-export function setAudioGraphGain(value: number) {
-  currentGain = value;
-  if (gainNode) gainNode.gain.value = value;
 }
 
 function attachSource(c: AudioContext, el: HTMLAudioElement): boolean {

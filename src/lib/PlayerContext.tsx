@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, ReactNode } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, ReactNode, Dispatch, SetStateAction } from 'react';
 import { api } from './api';
 import type { Track } from '../types';
 
@@ -37,24 +37,62 @@ interface PlayerContextValue {
 const PlayerContext = createContext<PlayerContextValue | null>(null);
 
 type Notice = { id: number; message: string; variant: 'default' | 'success' };
+type RepeatMode = 'off' | 'all' | 'one';
 
-function useNoticeState(): {
-  notice: Notice | null;
-  showNotice: (message: string, variant?: 'default' | 'success') => void;
-} {
-  const [notice, setNotice] = useState<Notice | null>(null);
-  const noticeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const noticeCounter = useRef(0);
+const isPlayable = (track: Track) => track.status !== 'suspended';
 
-  const showNotice = useCallback((message: string, variant: 'default' | 'success' = 'default') => {
-    noticeCounter.current += 1;
-    setNotice({ id: noticeCounter.current, message, variant });
-    if (noticeTimer.current) clearTimeout(noticeTimer.current);
-    noticeTimer.current = setTimeout(() => setNotice(null), 3500);
-  }, []);
+// ---------------------------------------------------------------------------
+// Pure queue decision logic (no side effects)
+// ---------------------------------------------------------------------------
 
-  return { notice, showNotice };
+type MoveDecision =
+  | { kind: 'empty' }
+  | { kind: 'unplayable' }
+  | { kind: 'replay' }
+  | { kind: 'end' }
+  | { kind: 'play'; track: Track };
+
+// Where the queue should go next given the current track and playback settings.
+function decideNextTrack(
+  q: Track[],
+  cur: Track,
+  offset: 1 | -1,
+  shuffle: boolean,
+  repeat: RepeatMode,
+): MoveDecision {
+  const playable = q.filter((t) => t.status !== 'suspended');
+  if (playable.length === 0) return { kind: 'empty' };
+
+  if (shuffle) {
+    let pick = playable[Math.floor(Math.random() * playable.length)];
+    if (playable.length > 1 && pick.id === cur.id) {
+      const others = playable.filter((t) => t.id !== cur.id);
+      pick = others[Math.floor(Math.random() * others.length)];
+    }
+    return { kind: 'play', track: pick };
+  }
+
+  if (playable.length <= 1) {
+    return isPlayable(cur) ? { kind: 'replay' } : { kind: 'unplayable' };
+  }
+
+  const idx = q.findIndex((t) => t.id === cur.id);
+  let nextIdx = (idx + offset + q.length) % q.length;
+  let guard = 0;
+  while (q[nextIdx]?.status === 'suspended' && guard < q.length) {
+    nextIdx = (nextIdx + offset + q.length) % q.length;
+    guard++;
+  }
+  const nextTrack = q[nextIdx];
+  if (!nextTrack || nextTrack.status === 'suspended') return { kind: 'unplayable' };
+  if (repeat === 'off' && offset === 1 && nextIdx <= idx) return { kind: 'end' };
+  if (repeat === 'off' && offset === -1 && nextIdx >= idx) return { kind: 'replay' };
+  return { kind: 'play', track: nextTrack };
 }
+
+// ---------------------------------------------------------------------------
+// Audio element helpers
+// ---------------------------------------------------------------------------
 
 // Loads a track into the audio element. seekTo > 0 seeks to that position once
 // metadata is ready; autoplay=false only loads (does not start playback).
@@ -88,7 +126,7 @@ function applyTrackToAudio(
   }
 }
 
-export function PlayerProvider({ children }: { children: ReactNode }) {
+function useAudio(current: Track | null) {
   const audioRef = useRef<HTMLAudioElement>(null);
   const [audioElement, setAudioElementState] = useState<HTMLAudioElement | null>(null);
   const audioElementRef = useRef<HTMLAudioElement | null>(null);
@@ -99,97 +137,149 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       setAudioElementState(el);
     }
   }, []);
+
+  const [volume, setVolumeState] = useState(0.8);
+  const [muted, setMuted] = useState(false);
+
+  const setVolume = useCallback((v: number) => {
+    setVolumeState(v);
+    setMuted(false);
+  }, []);
+
+  const toggleMute = useCallback(() => setMuted((m) => !m), []);
+
+  // keep volume in sync with audio element (the Web Audio graph taps the
+  // element's output, so the element volume is the single source of truth)
+  useEffect(() => {
+    if (audioRef.current) audioRef.current.volume = muted ? 0 : volume;
+  }, [volume, muted, current]);
+
+  return { audioRef, audioElement, setAudioElement, volume, setVolume, muted, toggleMute };
+}
+
+// ---------------------------------------------------------------------------
+// Playback state (values + mirrored refs for stable callbacks)
+// ---------------------------------------------------------------------------
+
+function usePlaybackState() {
   const [queue, setQueue] = useState<Track[]>([]);
   const [current, setCurrent] = useState<Track | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [direction, setDirection] = useState<1 | -1>(1);
   const [progress, setProgress] = useState(0);
   const [duration, setDuration] = useState(0);
-  const [volume, setVolumeState] = useState(0.8);
-  const [muted, setMuted] = useState(false);
   const [shuffle, setShuffle] = useState(false);
-  const [repeat, setRepeat] = useState<'off' | 'all' | 'one'>('off');
+  const [repeat, setRepeat] = useState<RepeatMode>('off');
+
   const shuffleRef = useRef(shuffle);
   const repeatRef = useRef(repeat);
+  const queueRef = useRef<Track[]>([]);
+  const currentRef = useRef<Track | null>(null);
   useEffect(() => {
     shuffleRef.current = shuffle;
   }, [shuffle]);
   useEffect(() => {
     repeatRef.current = repeat;
   }, [repeat]);
-  const { notice, showNotice } = useNoticeState();
+  useEffect(() => {
+    queueRef.current = queue;
+  }, [queue]);
+  useEffect(() => {
+    currentRef.current = current;
+  }, [current]);
 
-  const isPlayable = (track: Track) => track.status !== 'suspended';
+  return {
+    queue,
+    setQueue,
+    current,
+    setCurrent,
+    isPlaying,
+    setIsPlaying,
+    direction,
+    setDirection,
+    progress,
+    setProgress,
+    duration,
+    setDuration,
+    shuffle,
+    setShuffle,
+    repeat,
+    setRepeat,
+    shuffleRef,
+    repeatRef,
+    queueRef,
+    currentRef,
+  };
+}
 
-  type MoveDecision =
-    | { kind: 'empty' }
-    | { kind: 'unplayable' }
-    | { kind: 'replay' }
-    | { kind: 'end' }
-    | { kind: 'play'; track: Track };
+// ---------------------------------------------------------------------------
+// Playback actions
+// ---------------------------------------------------------------------------
 
-  // Pure decision logic for `move` — where the queue should go next given the
-  // current track and playback settings. No side effects.
-  function decideNextTrack(
-    q: Track[],
-    cur: Track,
-    offset: 1 | -1,
-    shuffle: boolean,
-    repeat: 'off' | 'all' | 'one',
-  ): MoveDecision {
-    const playable = q.filter((t) => t.status !== 'suspended');
-    if (playable.length === 0) return { kind: 'empty' };
+interface ActionsDeps {
+  audioRef: { current: HTMLAudioElement | null };
+  current: Track | null;
+  currentRef: { current: Track | null };
+  queueRef: { current: Track[] };
+  shuffleRef: { current: boolean };
+  repeatRef: { current: RepeatMode };
+  setCurrent: Dispatch<SetStateAction<Track | null>>;
+  setQueue: Dispatch<SetStateAction<Track[]>>;
+  setProgress: Dispatch<SetStateAction<number>>;
+  setDuration: Dispatch<SetStateAction<number>>;
+  setIsPlaying: Dispatch<SetStateAction<boolean>>;
+  setDirection: Dispatch<SetStateAction<1 | -1>>;
+  setShuffle: Dispatch<SetStateAction<boolean>>;
+  setRepeat: Dispatch<SetStateAction<RepeatMode>>;
+  showNotice: (message: string, variant?: 'default' | 'success') => void;
+}
 
-    if (shuffle) {
-      let pick = playable[Math.floor(Math.random() * playable.length)];
-      if (playable.length > 1 && pick.id === cur.id) {
-        const others = playable.filter((t) => t.id !== cur.id);
-        pick = others[Math.floor(Math.random() * others.length)];
-      }
-      return { kind: 'play', track: pick };
-    }
+function usePlayerActions(deps: ActionsDeps) {
+  const {
+    audioRef,
+    current,
+    currentRef,
+    queueRef,
+    shuffleRef,
+    repeatRef,
+    setCurrent,
+    setQueue,
+    setProgress,
+    setDuration,
+    setIsPlaying,
+    setDirection,
+    setShuffle,
+    setRepeat,
+    showNotice,
+  } = deps;
 
-    if (playable.length <= 1) {
-      return isPlayable(cur) ? { kind: 'replay' } : { kind: 'unplayable' };
-    }
-
-    const idx = q.findIndex((t) => t.id === cur.id);
-    let nextIdx = (idx + offset + q.length) % q.length;
-    let guard = 0;
-    while (q[nextIdx]?.status === 'suspended' && guard < q.length) {
-      nextIdx = (nextIdx + offset + q.length) % q.length;
-      guard++;
-    }
-    const nextTrack = q[nextIdx];
-    if (!nextTrack || nextTrack.status === 'suspended') return { kind: 'unplayable' };
-    if (repeat === 'off' && offset === 1 && nextIdx <= idx) return { kind: 'end' };
-    if (repeat === 'off' && offset === -1 && nextIdx >= idx) return { kind: 'replay' };
-    return { kind: 'play', track: nextTrack };
-  }
-
-  // Loads a track into the audio element. seekTo > 0 seeks to that position
-  // once metadata is ready; autoplay=false only loads (does not start playback).
-  const attachTrack = useCallback((track: Track, seekTo: number, autoplay: boolean) => {
-    setCurrent(track);
-    setProgress(Math.max(0, seekTo));
-    setDuration(track.duration || 0);
-    const audio = audioRef.current;
-    if (!audio) return;
-    applyTrackToAudio(audio, track, seekTo, autoplay, () => setIsPlaying(false));
-  }, []);
+  const attachTrack = useCallback(
+    (track: Track, seekTo: number, autoplay: boolean) => {
+      setCurrent(track);
+      setProgress(Math.max(0, seekTo));
+      setDuration(track.duration || 0);
+      const audio = audioRef.current;
+      if (!audio) return;
+      applyTrackToAudio(audio, track, seekTo, autoplay, () => setIsPlaying(false));
+    },
+    [audioRef, setCurrent, setProgress, setDuration, setIsPlaying],
+  );
 
   const loadTrack = useCallback(
     (track: Track, shouldPlay: boolean) => attachTrack(track, 0, shouldPlay),
     [attachTrack],
   );
 
-  const seek = useCallback((time: number) => {
-    const audio = audioRef.current;
-    if (audio && Number.isFinite(time)) {
-      audio.currentTime = time;
-      setProgress(time);
-    }
-  }, []);
+  const seek = useCallback(
+    (time: number) => {
+      const audio = audioRef.current;
+      if (audio && Number.isFinite(time)) {
+        audio.currentTime = time;
+        setProgress(time);
+      }
+    },
+    [audioRef, setProgress],
+  );
 
   const playTrack = useCallback(
     (track: Track, nextQueue?: Track[]) => {
@@ -199,7 +289,6 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       }
       if (nextQueue && nextQueue.length > 0) {
         setQueue(nextQueue);
-        const idx = nextQueue.findIndex((t) => t.id === track.id);
         setDirection(1);
       } else if (current && current.id === track.id) {
         const audio = audioRef.current;
@@ -218,7 +307,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       setIsPlaying(true);
       api.recordPlay(track.id).catch(() => {});
     },
-    [current, loadTrack, showNotice],
+    [current, audioRef, loadTrack, setQueue, setDirection, setIsPlaying, showNotice],
   );
 
   const playTrackAt = useCallback(
@@ -242,7 +331,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       setIsPlaying(true);
       api.recordPlay(track.id).catch(() => {});
     },
-    [attachTrack, current, isPlayable, seek, showNotice],
+    [attachTrack, current, seek, audioRef, setIsPlaying, showNotice],
   );
 
   const togglePlay = useCallback(() => {
@@ -261,16 +350,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       audio.pause();
       setIsPlaying(false);
     }
-  }, [current, showNotice]);
-
-  const queueRef = useRef<Track[]>([]);
-  const currentRef = useRef<Track | null>(null);
-  useEffect(() => {
-    queueRef.current = queue;
-  }, [queue]);
-  useEffect(() => {
-    currentRef.current = current;
-  }, [current]);
+  }, [current, audioRef, setIsPlaying, showNotice]);
 
   const move = useCallback(
     (offset: 1 | -1) => {
@@ -310,83 +390,122 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
           break;
       }
     },
-    [loadTrack, showNotice],
+    [audioRef, currentRef, queueRef, shuffleRef, repeatRef, loadTrack, setIsPlaying, setDirection, showNotice],
   );
 
   const next = useCallback(() => move(1), [move]);
   const prev = useCallback(() => move(-1), [move]);
 
-  const toggleShuffle = useCallback(() => setShuffle((s) => !s), []);
-  const cycleRepeat = useCallback(() => setRepeat((r) => (r === 'off' ? 'all' : r === 'all' ? 'one' : 'off')), []);
+  const toggleShuffle = useCallback(() => setShuffle((s) => !s), [setShuffle]);
+  const cycleRepeat = useCallback(() => setRepeat((r) => (r === 'off' ? 'all' : r === 'all' ? 'one' : 'off')), [setRepeat]);
 
-  const setVolume = useCallback((v: number) => {
-    setVolumeState(v);
-    setMuted(false);
+  return { attachTrack, loadTrack, seek, playTrack, playTrackAt, togglePlay, next, prev, toggleShuffle, cycleRepeat };
+}
+
+// ---------------------------------------------------------------------------
+// Notifications
+// ---------------------------------------------------------------------------
+
+function useNoticeState(): {
+  notice: Notice | null;
+  showNotice: (message: string, variant?: 'default' | 'success') => void;
+} {
+  const [notice, setNotice] = useState<Notice | null>(null);
+  const noticeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const noticeCounter = useRef(0);
+
+  const showNotice = useCallback((message: string, variant: 'default' | 'success' = 'default') => {
+    noticeCounter.current += 1;
+    setNotice({ id: noticeCounter.current, message, variant });
+    if (noticeTimer.current) clearTimeout(noticeTimer.current);
+    noticeTimer.current = setTimeout(() => setNotice(null), 3500);
   }, []);
 
-  const toggleMute = useCallback(() => {
-    setMuted((m) => !m);
-  }, []);
+  return { notice, showNotice };
+}
 
-  // keep volume in sync with audio element (the Web Audio graph taps the
-  // element's output, so the element volume is the single source of truth)
-  useEffect(() => {
-    if (audioRef.current) {
-      audioRef.current.volume = muted ? 0 : volume;
-    }
-  }, [volume, muted, current]);
+// ---------------------------------------------------------------------------
+
+export function PlayerProvider({ children }: { children: ReactNode }) {
+  const { notice, showNotice } = useNoticeState();
+  const playback = usePlaybackState();
+  const audio = useAudio(playback.current);
+  const actions = usePlayerActions({
+    audioRef: audio.audioRef,
+    current: playback.current,
+    currentRef: playback.currentRef,
+    queueRef: playback.queueRef,
+    shuffleRef: playback.shuffleRef,
+    repeatRef: playback.repeatRef,
+    setCurrent: playback.setCurrent,
+    setQueue: playback.setQueue,
+    setProgress: playback.setProgress,
+    setDuration: playback.setDuration,
+    setIsPlaying: playback.setIsPlaying,
+    setDirection: playback.setDirection,
+    setShuffle: playback.setShuffle,
+    setRepeat: playback.setRepeat,
+    showNotice,
+  });
 
   const value = useMemo(
     () => ({
-      queue,
-      current,
-      isPlaying,
-      direction,
-      progress,
-      duration,
-      volume,
-      muted,
-      shuffle,
-      repeat,
-      audioElement,
+      queue: playback.queue,
+      current: playback.current,
+      isPlaying: playback.isPlaying,
+      direction: playback.direction,
+      progress: playback.progress,
+      duration: playback.duration,
+      volume: audio.volume,
+      muted: audio.muted,
+      shuffle: playback.shuffle,
+      repeat: playback.repeat,
+      audioElement: audio.audioElement,
       notice,
       showNotice,
-      playTrack,
-      playTrackAt,
-      togglePlay,
-      next,
-      prev,
-      toggleShuffle,
-      cycleRepeat,
-      seek,
-      setVolume,
-      toggleMute,
+      playTrack: actions.playTrack,
+      playTrackAt: actions.playTrackAt,
+      togglePlay: actions.togglePlay,
+      next: actions.next,
+      prev: actions.prev,
+      toggleShuffle: actions.toggleShuffle,
+      cycleRepeat: actions.cycleRepeat,
+      seek: actions.seek,
+      setVolume: audio.setVolume,
+      toggleMute: audio.toggleMute,
     }),
-    [queue, current, isPlaying, direction, progress, duration, volume, muted, shuffle, repeat, audioElement, notice, showNotice, playTrack, playTrackAt, togglePlay, next, prev, toggleShuffle, cycleRepeat, seek, setVolume, toggleMute],
+    [
+      playback.queue, playback.current, playback.isPlaying, playback.direction, playback.progress,
+      playback.duration, playback.shuffle, playback.repeat,
+      audio.volume, audio.muted, audio.audioElement, audio.setVolume, audio.toggleMute,
+      notice, showNotice,
+      actions.playTrack, actions.playTrackAt, actions.togglePlay, actions.next, actions.prev,
+      actions.toggleShuffle, actions.cycleRepeat, actions.seek,
+    ],
   );
 
   return (
     <PlayerContext.Provider value={value}>
       {children}
       <audio
-        ref={setAudioElement}
+        ref={audio.setAudioElement}
         preload="auto"
-        onTimeUpdate={(e) => setProgress(e.currentTarget.currentTime)}
-        onLoadedMetadata={(e) => setDuration(e.currentTarget.duration)}
+        onTimeUpdate={(e) => playback.setProgress(e.currentTarget.currentTime)}
+        onLoadedMetadata={(e) => playback.setDuration(e.currentTarget.duration)}
         onError={() => {
-          setIsPlaying(false);
+          playback.setIsPlaying(false);
           showNotice('Failed to load audio');
         }}
         onEnded={() => {
-          if (repeatRef.current === 'one' && currentRef.current) {
-            loadTrack(currentRef.current, true);
-            setIsPlaying(true);
+          if (playback.repeatRef.current === 'one' && playback.currentRef.current) {
+            actions.loadTrack(playback.currentRef.current, true);
+            playback.setIsPlaying(true);
           } else {
-            next();
+            actions.next();
           }
         }}
-        onPlay={() => setIsPlaying(true)}
-        onPause={() => setIsPlaying(false)}
+        onPlay={() => playback.setIsPlaying(true)}
+        onPause={() => playback.setIsPlaying(false)}
       />
     </PlayerContext.Provider>
   );

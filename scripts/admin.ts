@@ -224,6 +224,23 @@ async function cmdOwner(args: string[]) {
 
 // --- scan -------------------------------------------------------------------
 
+type ScanRow = { id: number; title: string; artist: string; audio_url: string };
+type ScanOutcome =
+  | { kind: 'missing' }
+  | { kind: 'unreadable' }
+  | { kind: 'ok'; meta: NonNullable<Awaited<ReturnType<typeof readAudioMeta>>> };
+
+async function scanTrackRow(row: ScanRow): Promise<ScanOutcome> {
+  const abs = resolveInside(config.uploadDir, String(row.audio_url).replace(/^\/uploads\//, ''));
+  if (!abs || !fs.existsSync(abs)) return { kind: 'missing' };
+  try {
+    const meta = await readAudioMeta(abs);
+    return meta ? { kind: 'ok', meta } : { kind: 'unreadable' };
+  } catch {
+    return { kind: 'unreadable' };
+  }
+}
+
 async function cmdScan(args: string[]) {
   const all = args.includes('--all');
   const db = getDb();
@@ -233,7 +250,7 @@ async function cmdScan(args: string[]) {
         all ? '' : 'WHERE codec IS NULL OR sample_rate IS NULL OR sample_rate = 0'
       } ORDER BY id`,
     )
-    .all() as { id: number; title: string; artist: string; audio_url: string }[];
+    .all() as ScanRow[];
 
   if (rows.length === 0) {
     ok('no tracks to scan');
@@ -253,41 +270,36 @@ async function cmdScan(args: string[]) {
   db.exec('BEGIN');
   try {
     for (const row of rows) {
-      const abs = resolveInside(config.uploadDir, String(row.audio_url).replace(/^\/uploads\//, ''));
-      if (!abs || !fs.existsSync(abs)) {
+      const outcome = await scanTrackRow(row);
+      if (outcome.kind === 'missing') {
         skipped += 1;
         console.log(`    #${row.id}  ${row.title} — ${row.artist}   file missing`);
         continue;
       }
-      try {
-        const meta = await readAudioMeta(abs);
-        if (!meta) {
-          failed += 1;
-          console.log(`    #${row.id}  ${row.title} — ${row.artist}   unreadable`);
-          continue;
-        }
-        update.run(
-          meta.sampleRate,
-          meta.bitsPerSample,
-          meta.bitrate,
-          meta.duration,
-          meta.codec,
-          meta.container,
-          meta.lossless ? 1 : 0,
-          row.id,
-        );
-        updated += 1;
-        console.log(
-          `    #${row.id}  ${row.title} — ${row.artist}   ${formatQuality({
-            sample_rate: meta.sampleRate,
-            bit_depth: meta.bitsPerSample,
-            bitrate: meta.bitrate,
-          })}`,
-        );
-      } catch {
+      if (outcome.kind === 'unreadable') {
         failed += 1;
         console.log(`    #${row.id}  ${row.title} — ${row.artist}   unreadable`);
+        continue;
       }
+      const meta = outcome.meta;
+      update.run(
+        meta.sampleRate,
+        meta.bitsPerSample,
+        meta.bitrate,
+        meta.duration,
+        meta.codec,
+        meta.container,
+        meta.lossless ? 1 : 0,
+        row.id,
+      );
+      updated += 1;
+      console.log(
+        `    #${row.id}  ${row.title} — ${row.artist}   ${formatQuality({
+          sample_rate: meta.sampleRate,
+          bit_depth: meta.bitsPerSample,
+          bitrate: meta.bitrate,
+        })}`,
+      );
     }
     db.exec('COMMIT');
   } catch (e) {

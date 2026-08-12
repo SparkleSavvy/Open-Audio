@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import { Link } from 'react-router';
 import { motion } from 'motion/react';
 import {
@@ -76,6 +76,309 @@ function FollowingAvatar({ url, name }: { url: string | null; name: string }) {
   );
 }
 
+function TrackSkeleton() {
+  return (
+    <div className="mt-8 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-x-6 gap-y-10">
+      {Array.from({ length: 8 }).map((_, i) => (
+        <Skeleton key={i} className="aspect-square rounded-md" />
+      ))}
+    </div>
+  );
+}
+
+function TrackGrid({
+  tracks,
+  isPlaying,
+  onPlay,
+  onLike,
+}: {
+  tracks: Track[];
+  isPlaying: (t: Track) => boolean;
+  onPlay: (t: Track, list: Track[]) => void;
+  onLike: (t: Track) => void;
+}) {
+  return (
+    <StaggerGrid className="mt-8 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-x-6 gap-y-10">
+      {tracks.map((track) => (
+        <motion.div key={track.id} variants={staggerItem}>
+          <LibraryCard
+            trackId={track.id}
+            cover={track.coverUrl}
+            title={track.title}
+            artist={track.artist}
+            duration={track.duration}
+            isLiked={track.liked}
+            isPlaying={isPlaying(track)}
+            href={`/track/${track.id}`}
+            onPlay={() => onPlay(track, tracks)}
+            onLike={() => onLike(track)}
+          />
+        </motion.div>
+      ))}
+    </StaggerGrid>
+  );
+}
+
+function TrackListRows({
+  tracks,
+  isPlaying,
+  onPlay,
+  onLike,
+}: {
+  tracks: Track[];
+  isPlaying: (t: Track) => boolean;
+  onPlay: (t: Track, list: Track[]) => void;
+  onLike: (t: Track) => void;
+}) {
+  return (
+    <div className="mt-8 flex flex-col rounded-lg border border-neutral-900 divide-y divide-neutral-900">
+      {tracks.map((track) => (
+        <LibraryRow
+          key={track.id}
+          trackId={track.id}
+          cover={track.coverUrl}
+          title={track.title}
+          artist={track.artist}
+          duration={track.duration}
+          isLiked={track.liked}
+          isPlaying={isPlaying(track)}
+          href={`/track/${track.id}`}
+          onPlay={() => onPlay(track, tracks)}
+          onLike={() => onLike(track)}
+        />
+      ))}
+    </div>
+  );
+}
+
+function TrackLibrary({
+  loading,
+  tracks,
+  filtered,
+  query,
+  view,
+  isPlaying,
+  onPlay,
+  onLike,
+}: {
+  loading: boolean;
+  tracks: Track[];
+  filtered: Track[];
+  query: string;
+  view: 'grid' | 'list';
+  isPlaying: (t: Track) => boolean;
+  onPlay: (t: Track, list: Track[]) => void;
+  onLike: (t: Track) => void;
+}) {
+  if (loading) return <TrackSkeleton />;
+  if (filtered.length === 0) {
+    return tracks.length === 0 ? (
+      <EmptyState
+        icon={Heart}
+        title="No liked tracks yet"
+        text="Tap the heart on any track to keep it here for quick access."
+      />
+    ) : (
+      <EmptyState icon={Search} title={`No results for "${query.trim()}"`} text="Try a different search." />
+    );
+  }
+  return view === 'list' ? (
+    <TrackListRows tracks={filtered} isPlaying={isPlaying} onPlay={onPlay} onLike={onLike} />
+  ) : (
+    <TrackGrid tracks={filtered} isPlaying={isPlaying} onPlay={onPlay} onLike={onLike} />
+  );
+}
+
+function FollowingGrid({
+  users,
+  followButton,
+}: {
+  users: FollowedUser[];
+  followButton: (f: FollowedUser) => ReactNode;
+}) {
+  return (
+    <StaggerGrid className="mt-8 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-x-6 gap-y-10">
+      {users.map((f) => (
+        <motion.div key={f.user.id} variants={staggerItem} className="flex flex-col gap-2.5">
+          <Link
+            to={`/user/${f.user.id}`}
+            className="relative block aspect-square overflow-hidden rounded-md bg-neutral-900"
+          >
+            <FollowingAvatar url={f.user.avatarUrl} name={f.user.username} />
+          </Link>
+          <div className="min-w-0 px-0.5">
+            <Link to={`/user/${f.user.id}`} className="block">
+              <h3 className="text-sm font-semibold text-neutral-100 truncate hover:underline">{f.user.username}</h3>
+            </Link>
+            <p className="text-xs text-neutral-500 tabular-nums">{formatCount(f.followers)} followers</p>
+          </div>
+          {followButton(f)}
+        </motion.div>
+      ))}
+    </StaggerGrid>
+  );
+}
+
+function FollowingListRows({
+  users,
+  followButton,
+}: {
+  users: FollowedUser[];
+  followButton: (f: FollowedUser) => ReactNode;
+}) {
+  return (
+    <div className="mt-8 flex flex-col rounded-lg border border-neutral-900 divide-y divide-neutral-900">
+      {users.map((f) => (
+        <div
+          key={f.user.id}
+          className="group flex items-center gap-4 px-3 py-2.5 rounded-lg transition-colors hover:bg-neutral-900"
+        >
+          <Link
+            to={`/user/${f.user.id}`}
+            className="relative block w-12 h-12 shrink-0 overflow-hidden rounded-md bg-neutral-900"
+          >
+            <FollowingAvatar url={f.user.avatarUrl} name={f.user.username} />
+          </Link>
+          <Link to={`/user/${f.user.id}`} className="flex-1 min-w-0">
+            <p className="text-sm text-neutral-200 truncate hover:underline">{f.user.username}</p>
+            <p className="text-xs text-neutral-500 tabular-nums">{formatCount(f.followers)} followers</p>
+          </Link>
+          {followButton(f)}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function FollowingLibrary({
+  loading,
+  following,
+  filtered,
+  query,
+  view,
+  followButton,
+}: {
+  loading: boolean;
+  following: FollowedUser[];
+  filtered: FollowedUser[];
+  query: string;
+  view: 'grid' | 'list';
+  followButton: (f: FollowedUser) => ReactNode;
+}) {
+  if (loading) return <TrackSkeleton />;
+  if (filtered.length === 0) {
+    return following.length === 0 ? (
+      <EmptyState icon={Users} title="Not following anyone yet" text="People you follow will show up here." />
+    ) : (
+      <EmptyState icon={Search} title={`No results for "${query.trim()}"`} text="Try a different search." />
+    );
+  }
+  return view === 'list' ? (
+    <FollowingListRows users={filtered} followButton={followButton} />
+  ) : (
+    <FollowingGrid users={filtered} followButton={followButton} />
+  );
+}
+
+function LibraryTabs({
+  tab,
+  onTab,
+  reduced,
+}: {
+  tab: Tab;
+  onTab: (t: Tab) => void;
+  reduced: boolean;
+}) {
+  return (
+    <div className="border-b border-neutral-900">
+      <nav className="flex items-center gap-6 overflow-x-auto" aria-label="Library sections">
+        {TABS.map((t) => {
+          const active = tab === t.id;
+          return (
+            <button
+              key={t.id}
+              onClick={() => onTab(t.id)}
+              className={`relative shrink-0 pb-3 pt-1 text-sm whitespace-nowrap transition-colors press ${
+                active ? 'text-neutral-100 font-semibold' : 'text-neutral-500 hover:text-neutral-200'
+              }`}
+            >
+              {t.label}
+              {active && (
+                <motion.span
+                  layoutId={reduced ? undefined : 'library-tab'}
+                  className="absolute inset-x-0 bottom-0 h-0.5 bg-neutral-100"
+                  transition={{ type: 'spring', bounce: 0.25, duration: 0.5 }}
+                />
+              )}
+            </button>
+          );
+        })}
+      </nav>
+    </div>
+  );
+}
+
+function LibraryControls({
+  headline,
+  isDataTab,
+  view,
+  onView,
+  query,
+  onQuery,
+}: {
+  headline: string;
+  isDataTab: boolean;
+  view: 'grid' | 'list';
+  onView: (v: 'grid' | 'list') => void;
+  query: string;
+  onQuery: (q: string) => void;
+}) {
+  return (
+    <div className="mt-6 flex flex-wrap items-start justify-between gap-4">
+      <h1 className="text-2xl font-bold tracking-tight text-neutral-100">{headline}</h1>
+
+      {isDataTab && (
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-medium text-neutral-500 uppercase tracking-wide">View</span>
+            <div className="flex items-center gap-1 rounded-md border border-neutral-800 bg-neutral-900 p-0.5">
+              <button
+                onClick={() => onView('grid')}
+                className={`w-8 h-8 flex items-center justify-center rounded transition-colors press ${
+                  view === 'grid' ? 'bg-neutral-100 text-neutral-950' : 'text-neutral-400 hover:text-neutral-100'
+                }`}
+                title="Grid view"
+              >
+                <LayoutGrid className="w-4 h-4" />
+              </button>
+              <button
+                onClick={() => onView('list')}
+                className={`w-8 h-8 flex items-center justify-center rounded transition-colors press ${
+                  view === 'list' ? 'bg-neutral-100 text-neutral-950' : 'text-neutral-400 hover:text-neutral-100'
+                }`}
+                title="List view"
+              >
+                <List className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-neutral-500 pointer-events-none" />
+            <input
+              type="text"
+              value={query}
+              onChange={(e) => onQuery(e.target.value)}
+              placeholder="Filter"
+              className="w-44 sm:w-56 pl-9 pr-3 py-2 text-sm bg-neutral-900 border border-neutral-800 rounded-full text-neutral-100 placeholder-neutral-500 focus:outline-none focus:border-neutral-600 transition-colors"
+            />
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function LibraryPage() {
   const { user, loading: authLoading } = useAuth();
   const player = usePlayer();
@@ -149,6 +452,7 @@ export default function LibraryPage() {
   const placeholder = PLACEHOLDERS[tab];
 
   const playList = (track: Track, list: Track[]) => player.playTrack(track, list);
+  const trackIsPlaying = (t: Track) => player.current?.id === t.id && player.isPlaying;
 
   const toggleLike = async (track: Track) => {
     if (!user) return;
@@ -185,7 +489,7 @@ export default function LibraryPage() {
     }
   };
 
-  const followButton = (f: FollowedUser) =>
+  const followButton = (f: FollowedUser): ReactNode =>
     user && f.user.id !== user.id ? (
       <button
         onClick={() => toggleFollowUser(f)}
@@ -200,219 +504,44 @@ export default function LibraryPage() {
       </button>
     ) : null;
 
-  const trackIsPlaying = (t: Track) => player.current?.id === t.id && player.isPlaying;
-
-  const renderSkeleton = () => (
-    <div className="mt-8 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-x-6 gap-y-10">
-      {Array.from({ length: 8 }).map((_, i) => (
-        <Skeleton key={i} className="aspect-square rounded-md" />
-      ))}
-    </div>
-  );
-
-  const renderTrackContent = () => {
-    if (loading) return renderSkeleton();
-
-    if (filtered.length === 0) {
-      return tracks.length === 0 ? (
-        <EmptyState
-          icon={Heart}
-          title="No liked tracks yet"
-          text="Tap the heart on any track to keep it here for quick access."
-        />
-      ) : (
-        <EmptyState icon={Search} title={`No results for "${query.trim()}"`} text="Try a different search." />
-      );
-    }
-
-    if (view === 'list') {
-      return (
-        <div className="mt-8 flex flex-col rounded-lg border border-neutral-900 divide-y divide-neutral-900">
-          {filtered.map((track) => (
-            <LibraryRow
-              key={track.id}
-              trackId={track.id}
-              cover={track.coverUrl}
-              title={track.title}
-              artist={track.artist}
-              duration={track.duration}
-              isLiked={track.liked}
-              isPlaying={trackIsPlaying(track)}
-              href={`/track/${track.id}`}
-              onPlay={() => playList(track, filtered)}
-              onLike={() => toggleLike(track)}
-            />
-          ))}
-        </div>
-      );
-    }
-
-    return (
-      <StaggerGrid className="mt-8 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-x-6 gap-y-10">
-        {filtered.map((track) => (
-          <motion.div key={track.id} variants={staggerItem}>
-            <LibraryCard
-              trackId={track.id}
-              cover={track.coverUrl}
-              title={track.title}
-              artist={track.artist}
-              duration={track.duration}
-              isLiked={track.liked}
-              isPlaying={trackIsPlaying(track)}
-              href={`/track/${track.id}`}
-              onPlay={() => playList(track, filtered)}
-              onLike={() => toggleLike(track)}
-            />
-          </motion.div>
-        ))}
-      </StaggerGrid>
-    );
-  };
-
-  const renderFollowingContent = () => {
-    if (followingLoading) return renderSkeleton();
-
-    if (filteredFollowing.length === 0) {
-      return following.length === 0 ? (
-        <EmptyState
-          icon={Users}
-          title="Not following anyone yet"
-          text="People you follow will show up here."
-        />
-      ) : (
-        <EmptyState icon={Search} title={`No results for "${query.trim()}"`} text="Try a different search." />
-      );
-    }
-
-    if (view === 'list') {
-      return (
-        <div className="mt-8 flex flex-col rounded-lg border border-neutral-900 divide-y divide-neutral-900">
-          {filteredFollowing.map((f) => (
-            <div key={f.user.id} className="group flex items-center gap-4 px-3 py-2.5 rounded-lg transition-colors hover:bg-neutral-900">
-              <Link
-                to={`/user/${f.user.id}`}
-                className="relative block w-12 h-12 shrink-0 overflow-hidden rounded-md bg-neutral-900"
-              >
-                <FollowingAvatar url={f.user.avatarUrl} name={f.user.username} />
-              </Link>
-              <Link to={`/user/${f.user.id}`} className="flex-1 min-w-0">
-                <p className="text-sm text-neutral-200 truncate hover:underline">{f.user.username}</p>
-                <p className="text-xs text-neutral-500 tabular-nums">{formatCount(f.followers)} followers</p>
-              </Link>
-              {followButton(f)}
-            </div>
-          ))}
-        </div>
-      );
-    }
-
-    return (
-      <StaggerGrid className="mt-8 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-x-6 gap-y-10">
-        {filteredFollowing.map((f) => (
-          <motion.div key={f.user.id} variants={staggerItem} className="flex flex-col gap-2.5">
-            <Link
-              to={`/user/${f.user.id}`}
-              className="relative block aspect-square overflow-hidden rounded-md bg-neutral-900"
-            >
-              <FollowingAvatar url={f.user.avatarUrl} name={f.user.username} />
-            </Link>
-            <div className="min-w-0 px-0.5">
-              <Link to={`/user/${f.user.id}`} className="block">
-                <h3 className="text-sm font-semibold text-neutral-100 truncate hover:underline">{f.user.username}</h3>
-              </Link>
-              <p className="text-xs text-neutral-500 tabular-nums">{formatCount(f.followers)} followers</p>
-            </div>
-            {followButton(f)}
-          </motion.div>
-        ))}
-      </StaggerGrid>
-    );
-  };
-
   return (
     <motion.div
       initial={{ opacity: 0, y: 12 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.4, ease: 'easeOut' }}
     >
-      {/* TABS */}
-      <div className="border-b border-neutral-900">
-        <nav className="flex items-center gap-6 overflow-x-auto" aria-label="Library sections">
-          {TABS.map((t) => {
-            const active = tab === t.id;
-            return (
-              <button
-                key={t.id}
-                onClick={() => setTab(t.id)}
-                className={`relative shrink-0 pb-3 pt-1 text-sm whitespace-nowrap transition-colors press ${
-                  active ? 'text-neutral-100 font-semibold' : 'text-neutral-500 hover:text-neutral-200'
-                }`}
-              >
-                {t.label}
-                {active && (
-                  <motion.span
-                    layoutId={reduced ? undefined : 'library-tab'}
-                    className="absolute inset-x-0 bottom-0 h-0.5 bg-neutral-100"
-                    transition={{ type: 'spring', bounce: 0.25, duration: 0.5 }}
-                  />
-                )}
-              </button>
-            );
-          })}
-        </nav>
-      </div>
+      <LibraryTabs tab={tab} onTab={setTab} reduced={reduced} />
+      <LibraryControls
+        headline={HEADLINES[tab]}
+        isDataTab={isDataTab}
+        view={view}
+        onView={setView}
+        query={query}
+        onQuery={setQuery}
+      />
 
-      {/* CONTROL PANEL */}
-      <div className="mt-6 flex flex-wrap items-start justify-between gap-4">
-        <h1 className="text-2xl font-bold tracking-tight text-neutral-100">{HEADLINES[tab]}</h1>
-
-        {isDataTab && (
-          <div className="flex flex-wrap items-center gap-3">
-            <div className="flex items-center gap-2">
-              <span className="text-xs font-medium text-neutral-500 uppercase tracking-wide">View</span>
-              <div className="flex items-center gap-1 rounded-md border border-neutral-800 bg-neutral-900 p-0.5">
-                <button
-                  onClick={() => setView('grid')}
-                  className={`w-8 h-8 flex items-center justify-center rounded transition-colors press ${
-                    view === 'grid' ? 'bg-neutral-100 text-neutral-950' : 'text-neutral-400 hover:text-neutral-100'
-                  }`}
-                  title="Grid view"
-                >
-                  <LayoutGrid className="w-4 h-4" />
-                </button>
-                <button
-                  onClick={() => setView('list')}
-                  className={`w-8 h-8 flex items-center justify-center rounded transition-colors press ${
-                    view === 'list' ? 'bg-neutral-100 text-neutral-950' : 'text-neutral-400 hover:text-neutral-100'
-                  }`}
-                  title="List view"
-                >
-                  <List className="w-4 h-4" />
-                </button>
-              </div>
-            </div>
-
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-neutral-500 pointer-events-none" />
-              <input
-                type="text"
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                placeholder="Filter"
-                className="w-44 sm:w-56 pl-9 pr-3 py-2 text-sm bg-neutral-900 border border-neutral-800 rounded-full text-neutral-100 placeholder-neutral-500 focus:outline-none focus:border-neutral-600 transition-colors"
-              />
-            </div>
-          </div>
-        )}
-      </div>
-
-      {/* CONTENT */}
       {placeholder ? (
         <EmptyState icon={placeholder.icon} title={placeholder.title} text={placeholder.text} />
       ) : showTracks ? (
-        renderTrackContent()
+        <TrackLibrary
+          loading={loading}
+          tracks={tracks}
+          filtered={filtered}
+          query={query}
+          view={view}
+          isPlaying={trackIsPlaying}
+          onPlay={playList}
+          onLike={toggleLike}
+        />
       ) : (
-        renderFollowingContent()
+        <FollowingLibrary
+          loading={followingLoading}
+          following={following}
+          filtered={filteredFollowing}
+          query={query}
+          view={view}
+          followButton={followButton}
+        />
       )}
     </motion.div>
   );

@@ -107,8 +107,7 @@ HTTPS and set `COOKIE_SECURE=1` / `TRUST_PROXY=1` via
 ### 2b. Install with npm
 
 ```bash
-npm install
-npm run setup                             # .env + SQLite DB + owner account
+npm run setup                             # installs deps, creates .env + SQLite DB + owner account
 # edit .env: set JWT_SECRET, REMOVAL_KEY, OWNER_PASSWORD, NODE_ENV=production
 npm run build
 npm start                                 # single server on :4000 (SPA + API + files)
@@ -216,7 +215,7 @@ highlighted, and the header counter refreshes every 30 seconds.
 
 | Command          | Action                                              |
 | ---------------- | --------------------------------------------------- |
-| `npm run setup`  | Install: env, database, admin account               |
+| `npm run setup`  | Install deps, create `.env` + SQLite DB + owner account |
 | `npm run admin`  | Admin CLI (see above)                               |
 | `npm run dev`    | Run API (:4000) + Vite (:3000) in parallel          |
 | `npm run build`  | Production frontend build into `dist/`              |
@@ -238,6 +237,8 @@ server/               Express backend
   routes/tracks.ts    feed, search, details, likes, download, deletion
   routes/upload.ts    file uploads (multer) + magic bytes + metadata → pending
   routes/admin.ts     moderation, users, statistics, audit
+  routes/users.ts     public profiles, follow, user tracks/reposts/likes
+  routes/studio.ts    studio — import external audio by URL (yt-dlp) into a pending upload
   routes/notifications.ts  notification center
   admin.ts            admin domain logic (shared by API and CLI)
   security.ts         rate limiter, brute-force, magic bytes, resolveInside
@@ -356,7 +357,7 @@ service/process, volumes, env, and status for both deployment modes.
 | `status`                    | mode, port, data dir, running state, health                   |
 | `health`                    | probe `GET /api/health`                                       |
 | `logs [-f]`                 | show logs (journalctl for systemd, `docker logs`, or file)    |
-| `config list\|get\|set\|edit\|secret\|removal-key` | manage `.env` (secrets are masked); `set`/`secret`/`removal-key` restart automatically |
+| `config list / get / set / edit / secret / removal-key` | manage `.env` (secrets are masked); `set`/`secret`/`removal-key` restart automatically |
 | `update`                    | pull + reinstall/rebuild + restart                            |
 | `backup [dir]` / `restore <dir>` | DB + uploads snapshot via the admin CLI                 |
 | `admin <args…>`             | pass-through to `npm run admin`                               |

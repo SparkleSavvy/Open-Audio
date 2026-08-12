@@ -120,6 +120,79 @@ function rmrf(dir: string) {
   }
 }
 
+interface TrackInfo {
+  title?: string;
+  uploader?: string;
+  duration?: number;
+  webpage_url?: string;
+}
+
+type InfoResult =
+  | { status: 'ok'; info: TrackInfo }
+  | { status: 'metaFailed' }
+  | { status: 'parseFailed' };
+
+async function fetchTrackInfo(url: URL): Promise<InfoResult> {
+  const run = await runYtDlp([
+    '--dump-json',
+    '--no-playlist',
+    '--skip-download',
+    '--no-warnings',
+    '--no-cookies-from-browser',
+    url.href,
+  ]);
+  if (run.code !== 0) {
+    console.error('[open-audio] yt-dlp metadata failed', run.stderr.slice(0, 500));
+    return { status: 'metaFailed' };
+  }
+  try {
+    return { status: 'ok', info: JSON.parse(run.stdout) as TrackInfo };
+  } catch {
+    console.error('[open-audio] yt-dlp JSON parse failed', run.stdout.slice(0, 500));
+    return { status: 'parseFailed' };
+  }
+}
+
+async function downloadTrack(url: URL, tmpDir: string): Promise<boolean> {
+  const run = await runYtDlp([
+    '--no-playlist',
+    '--no-progress',
+    '--no-warnings',
+    '--no-cookies-from-browser',
+    '-f',
+    'bestaudio[ext=m4a]/bestaudio',
+    '--write-thumbnail',
+    '-o',
+    path.join(tmpDir, 'track.%(ext)s'),
+    url.href,
+  ]);
+  if (run.code !== 0) {
+    console.error('[open-audio] yt-dlp download failed', run.stderr.slice(0, 500));
+    return false;
+  }
+  return true;
+}
+
+function locateAudioFile(tmpDir: string): string | null {
+  const audioPath = ['.m4a', '.mp4']
+    .map((ext) => path.join(tmpDir, `track${ext}`))
+    .find((p) => fs.existsSync(p));
+  if (!audioPath) console.error('[open-audio] yt-dlp produced no audio file in', tmpDir);
+  return audioPath ?? null;
+}
+
+// Prefer embedded cover art (already extracted to the covers dir by
+// readAudioMeta); fall back to the yt-dlp thumbnail.
+function resolveCoverUrl(tmpDir: string, metaCover: string | null): string | null {
+  if (metaCover) return metaCover;
+  const thumbs = fs.readdirSync(tmpDir).filter((f) => /\.(jpg|jpeg|png|webp)$/i.test(f));
+  for (const t of thumbs) {
+    const persisted = persistThumbnail(path.join(tmpDir, t));
+    if (persisted) return persisted;
+  }
+  return null;
+}
+
 async function handleImport(req: Request, res: Response) {
   const userId = req.user!.id;
   if (importing.has(userId)) {
@@ -137,52 +210,24 @@ async function handleImport(req: Request, res: Response) {
   importing.add(userId);
   const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'sparkle-import-'));
   try {
-    const infoRun = await runYtDlp([
-      '--dump-json',
-      '--no-playlist',
-      '--skip-download',
-      '--no-warnings',
-      '--no-cookies-from-browser',
-      url.href,
-    ]);
-    if (infoRun.code !== 0) {
-      console.error('[open-audio] yt-dlp metadata failed', infoRun.stderr.slice(0, 500));
+    const infoResult = await fetchTrackInfo(url);
+    if (infoResult.status === 'metaFailed') {
       return res
         .status(422)
         .json({ error: 'Could not fetch this SoundCloud track — it may be unavailable or private' });
     }
-    let info: { title?: string; uploader?: string; duration?: number; webpage_url?: string };
-    try {
-      info = JSON.parse(infoRun.stdout);
-    } catch {
-      console.error('[open-audio] yt-dlp JSON parse failed', infoRun.stdout.slice(0, 500));
+    if (infoResult.status === 'parseFailed') {
       return res.status(422).json({ error: 'Could not fetch this SoundCloud track — try again' });
     }
 
-    const dlRun = await runYtDlp([
-      '--no-playlist',
-      '--no-progress',
-      '--no-warnings',
-      '--no-cookies-from-browser',
-      '-f',
-      'bestaudio[ext=m4a]/bestaudio',
-      '--write-thumbnail',
-      '-o',
-      path.join(tmpDir, 'track.%(ext)s'),
-      url.href,
-    ]);
-    if (dlRun.code !== 0) {
-      console.error('[open-audio] yt-dlp download failed', dlRun.stderr.slice(0, 500));
+    if (!(await downloadTrack(url, tmpDir))) {
       return res
         .status(422)
         .json({ error: 'Could not download this SoundCloud track — it may be unavailable or private' });
     }
 
-    const audioPath = ['.m4a', '.mp4']
-      .map((ext) => path.join(tmpDir, `track${ext}`))
-      .find((p) => fs.existsSync(p));
+    const audioPath = locateAudioFile(tmpDir);
     if (!audioPath) {
-      console.error('[open-audio] yt-dlp produced no audio file in', tmpDir);
       return res
         .status(422)
         .json({ error: 'SoundCloud returned an unsupported format — try a different track' });
@@ -201,19 +246,7 @@ async function handleImport(req: Request, res: Response) {
       return res.status(422).json({ error: 'Could not read the downloaded audio file' });
     }
 
-    // Prefer embedded cover art (already extracted to the covers dir by
-    // readAudioMeta); fall back to the yt-dlp thumbnail.
-    let coverUrl = meta.cover;
-    if (!coverUrl) {
-      const thumbs = fs.readdirSync(tmpDir).filter((f) => /\.(jpg|jpeg|png|webp)$/i.test(f));
-      for (const t of thumbs) {
-        const persisted = persistThumbnail(path.join(tmpDir, t));
-        if (persisted) {
-          coverUrl = persisted;
-          break;
-        }
-      }
-    }
+    const coverUrl = resolveCoverUrl(tmpDir, meta.cover);
     if (!coverUrl) {
       return res.status(422).json({ error: 'No cover image was found for this track' });
     }
@@ -222,8 +255,8 @@ async function handleImport(req: Request, res: Response) {
     const audioDest = path.join(AUDIO_DIR, storedName);
     fs.copyFileSync(audioPath, audioDest);
 
-    const title = (info.title ?? meta.title ?? '').trim().slice(0, 120) || 'Untitled';
-    const artist = (info.uploader ?? meta.artist ?? '').trim().slice(0, 120) || 'Unknown';
+    const title = (infoResult.info.title ?? meta.title ?? '').trim().slice(0, 120) || 'Untitled';
+    const artist = (infoResult.info.uploader ?? meta.artist ?? '').trim().slice(0, 120) || 'Unknown';
 
     const db = getDb();
     const trackId = insertTrackRow(
@@ -236,7 +269,7 @@ async function handleImport(req: Request, res: Response) {
         license: 'all rights reserved',
         duration: meta.duration,
         source: 'soundcloud',
-        sourceUrl: info.webpage_url ?? url.href,
+        sourceUrl: infoResult.info.webpage_url ?? url.href,
       },
       `/uploads/audio/${storedName}`,
       coverUrl,
