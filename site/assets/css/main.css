@@ -489,6 +489,11 @@ section[id] {
   padding: 5px 12px;
   cursor: pointer;
 }
+.copy-btn > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
 .copy-btn:hover {
   color: var(--text);
   border-color: var(--line-strong);
@@ -500,7 +505,7 @@ section[id] {
   display: none;
 }
 .copy-btn.done .when-copied {
-  display: inline;
+  display: inline-flex;
 }
 .term pre {
   margin: 0;
