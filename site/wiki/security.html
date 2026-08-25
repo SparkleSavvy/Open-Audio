@@ -1,0 +1,163 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="Authentication, rate limiting, brute-force protection, upload validation, path traversal guards and auditing." />
+  <link rel="icon" type="image/svg+xml" href="../assets/favicon.svg" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400..700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="../assets/css/main.css" />
+  <title>Security — Open Audio Docs</title>
+</head>
+<body>
+
+  <header class="site-header">
+    <div class="shell header-inner">
+      <a class="brand press" href="../index.html">
+          <span class="brand-mark" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M2 10v3M6 6v11M10 3v18M14 8v7M18 5v13M22 10v3"/></svg>
+          </span>
+        <span class="brand-name">OPEN&nbsp;AUDIO</span>
+      </a>
+      <nav class="nav-desktop" aria-label="Main">
+        <a class="nav-link press" href="../index.html">Home</a>
+        <a class="nav-link press active" href="index.html">Docs</a>
+        <a class="nav-link press" href="https://github.com/SparkleSavvy/Open-Audio" aria-label="GitHub repository"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 22v-4a4.8 4.8 0 0 0-1-3.5c3 0 6-2 6-5.5.08-1.25-.27-2.48-1-3.5.28-1.15.28-2.35 0-3.5 0 0-1 0-3 1.5-2.64-.5-5.36-.5-8 0C6 2 5 2 5 2c-.3 1.15-.3 2.35 0 3.5A5.403 5.403 0 0 0 4 9c0 3.5 3 5.5 6 5.5-.39.49-.68 1.05-.85 1.65-.17.6-.22 1.23-.15 1.85v4"/><path d="M9 18c-4.51 2-5-2-7-2"/></svg></a>
+      </nav>
+      <button class="menu-btn press" type="button" aria-expanded="false" aria-controls="mobile-nav" aria-label="Toggle navigation">
+        <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 6h16M4 12h16M4 18h16"/></svg>
+      </button>
+    </div>
+    <div id="mobile-nav" class="mobile-nav">
+      <a href="../index.html">Home</a>
+      <a class="active" href="index.html">Docs</a>
+      <a href="https://github.com/SparkleSavvy/Open-Audio">GitHub</a>
+    </div>
+  </header>
+
+  <main class="shell wiki-layout">
+
+    <aside>
+      <details class="sidebar-nav" open>
+        <summary>Browse docs</summary>
+        <div class="side-group">
+          <p class="side-label">Introduction</p>
+          <a class="side-link" href="index.html">Overview</a>
+          <a class="side-link" href="getting-started.html">Getting started</a>
+        </div>
+        <div class="side-group">
+          <p class="side-label">Using Open Audio</p>
+          <a class="side-link" href="features.html">Features</a>
+          <a class="side-link" href="uploads-and-formats.html">Uploads &amp; formats</a>
+          <a class="side-link" href="moderation-and-roles.html">Moderation &amp; roles</a>
+          <a class="side-link" href="supporter.html">Supporter</a>
+        </div>
+        <div class="side-group">
+          <p class="side-label">Administration</p>
+          <a class="side-link" href="admin-cli.html">Admin CLI</a>
+          <a class="side-link active" href="security.html">Security</a>
+        </div>
+        <div class="side-group">
+          <p class="side-label">Reference</p>
+          <a class="side-link" href="deployment.html">Deployment</a>
+          <a class="side-link" href="api-reference.html">API reference</a>
+          <a class="side-link" href="faq.html">FAQ</a>
+        </div>
+      </details>
+    </aside>
+
+    <article>
+      <nav class="crumb" aria-label="Breadcrumb">
+        <a href="index.html">Docs</a><i>/</i><span>Administration</span><i>/</i><span aria-current="page">Security</span>
+      </nav>
+      <h1 class="page-title">Security model</h1>
+      <p class="page-sub">Defense in depth without the ceremony — here is every mechanism and where it applies.</p>
+
+      <div class="prose">
+
+        <h2>Authentication</h2>
+        <ul>
+          <li>Passwords hashed with <strong>scrypt</strong>; sessions are JWTs in an <strong>httpOnly cookie</strong> (<code class="inline">sameSite=lax</code>, <code class="inline">priority=high</code>, <code class="inline">secure</code> in production).</li>
+          <li>Optional <strong>TOTP two-factor</strong> login (<code class="inline">/api/auth/2fa/*</code>) with QR enrollment.</li>
+          <li><strong>Brute-force guard</strong> — after 5 failed attempts the IP+username key locks with exponential delay.</li>
+          <li>Banned users have their cookie forcefully cleared on the next authenticated request.</li>
+        </ul>
+
+        <h2>Rate limits</h2>
+        <table class="docs-table">
+          <thead><tr><th>Scope</th><th>Limit</th></tr></thead>
+          <tbody>
+            <tr><td>All <code class="inline">/api</code> routes</td><td>300 requests / 15 min per IP</td></tr>
+            <tr><td><code class="inline">/api/auth</code></td><td>20 requests / 15 min per IP</td></tr>
+            <tr><td>Login &amp; 2FA endpoints</td><td>brute-force lockout on top</td></tr>
+          </tbody>
+        </table>
+
+        <h2>Uploads</h2>
+        <p>Files are validated twice: declared mimetype and actual <strong>magic bytes</strong>. Only policy formats pass (see <a href="uploads-and-formats.html">Uploads &amp; formats</a>); media that is really HTML or JavaScript is rejected before it touches disk.</p>
+
+        <h2>Filesystem</h2>
+        <ul>
+          <li>All reads and deletes of user media go through <code class="inline">resolveInside</code>, which confines paths to <code class="inline">UPLOAD_DIR</code> — traversal escapes fail closed.</li>
+          <li><code class="inline">/uploads</code> static serving disables directory indexing and falls through closed.</li>
+        </ul>
+
+        <h2>Headers &amp; transport</h2>
+        <ul>
+          <li><strong>helmet</strong> security headers on by default; strict CSP + HSTS with <code class="inline">HELMET_CSP=1</code>.</li>
+          <li>Behind proxies set <code class="inline">TRUST_PROXY=1</code> and <code class="inline">COOKIE_SECURE=1</code>.</li>
+        </ul>
+
+        <h2>Secrets</h2>
+        <div class="note"><strong>Rotation is destructive by design.</strong> Rotating <code class="inline">JWT_SECRET</code> invalidates every session <em>and all TOTP secrets</em> (they are encrypted with the old key) — users re-enroll 2FA. In production the server refuses to boot with a weak or default secret.</div>
+        <p><code class="inline">REMOVAL_KEY</code> gates the full server-removal flow; even then the removal is confirmed by the owner in the UI.</p>
+
+        <h2>Audit</h2>
+        <p>Every administrative action — API and CLI alike — is appended to <code class="inline">admin_log</code> and readable via <code class="inline">GET /api/admin/audit</code>.</p>
+      </div>
+
+      <nav class="pager" aria-label="Pagination">
+        <a class="prev" href="admin-cli.html"><span class="dir">Previous</span><span class="target">Admin CLI</span></a>
+        <a class="next" href="deployment.html"><span class="dir">Next</span><span class="target">Deployment</span></a>
+      </nav>
+    </article>
+
+  </main>
+
+  <footer class="site-footer">
+    <div class="shell">
+      <div class="footer-grid">
+        <div class="f-brand">
+          <a class="brand press" href="../index.html">
+          <span class="brand-mark" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M2 10v3M6 6v11M10 3v18M14 8v7M18 5v13M22 10v3"/></svg>
+          </span>
+            <span class="brand-name">OPEN&nbsp;AUDIO</span>
+          </a>
+          <p>A minimalist music service with a dark monochrome look. Uploads, downloads, and community-driven moderation.</p>
+        </div>
+        <div class="f-col">
+          <h4>Project</h4>
+          <a href="../index.html">Home</a>
+          <a href="https://github.com/SparkleSavvy/Open-Audio">GitHub</a>
+        </div>
+        <div class="f-col">
+          <h4>Documentation</h4>
+          <a href="index.html">Overview</a>
+          <a href="getting-started.html">Getting started</a>
+          <a href="api-reference.html">API reference</a>
+          <a href="deployment.html">Deployment</a>
+        </div>
+      </div>
+      <div class="f-meta">
+        <span>&copy; <span data-year>2026</span> Open Audio contributors &middot; MIT License</span>
+        <span>Static site &mdash; no trackers, no analytics</span>
+      </div>
+    </div>
+  </footer>
+
+  <script src="../assets/js/main.js"></script>
+</body>
+</html>

@@ -1,0 +1,291 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="Open Audio — minimalist self-hosted music streaming. Like SoundCloud, without the limits: uploads, free downloads, community moderation." />
+  <link rel="icon" type="image/svg+xml" href="assets/favicon.svg" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400..700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="assets/css/main.css" />
+  <title>Open Audio — minimalist self-hosted music streaming</title>
+</head>
+<body>
+
+  <header class="site-header">
+    <div class="shell header-inner">
+      <a class="brand press" href="index.html">
+        <span class="brand-mark" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M2 10v3M6 6v11M10 3v18M14 8v7M18 5v13M22 10v3"/></svg>
+        </span>
+        <span class="brand-name">OPEN&nbsp;AUDIO</span>
+      </a>
+      <nav class="nav-desktop" aria-label="Main">
+        <a class="nav-link press" href="#features">Features</a>
+        <a class="nav-link press" href="#moderation">Moderation</a>
+        <a class="nav-link press" href="#selfhost">Self-host</a>
+        <a class="nav-link press" href="wiki/index.html">Docs</a>
+        <a class="nav-link press" href="https://github.com/SparkleSavvy/Open-Audio" aria-label="GitHub repository">
+          <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 22v-4a4.8 4.8 0 0 0-1-3.5c3 0 6-2 6-5.5.08-1.25-.27-2.48-1-3.5.28-1.15.28-2.35 0-3.5 0 0-1 0-3 1.5-2.64-.5-5.36-.5-8 0C6 2 5 2 5 2c-.3 1.15-.3 2.35 0 3.5A5.403 5.403 0 0 0 4 9c0 3.5 3 5.5 6 5.5-.39.49-.68 1.05-.85 1.65-.17.6-.22 1.23-.15 1.85v4"/><path d="M9 18c-4.51 2-5-2-7-2"/></svg>
+        </a>
+      </nav>
+      <button class="menu-btn press" type="button" aria-expanded="false" aria-controls="mobile-nav" aria-label="Toggle navigation">
+        <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 6h16M4 12h16M4 18h16"/></svg>
+      </button>
+    </div>
+    <div id="mobile-nav" class="mobile-nav">
+      <a href="#features">Features</a>
+      <a href="#moderation">Moderation</a>
+      <a href="#selfhost">Self-host</a>
+      <a href="wiki/index.html">Docs</a>
+      <a href="https://github.com/SparkleSavvy/Open-Audio">GitHub</a>
+    </div>
+  </header>
+
+  <main>
+
+    <section class="hero">
+      <div class="shell">
+        <p class="hero-note">Self-hosted&nbsp;&nbsp;·&nbsp;&nbsp;Open source&nbsp;&nbsp;·&nbsp;&nbsp;MIT license</p>
+        <h1 class="hero-title">OPEN <span class="stroke">AUDIO</span></h1>
+        <p class="hero-lead">Minimalist music streaming you host yourself. Like SoundCloud, but without the limits — free uploads, free downloads, and moderation run by your own community.</p>
+        <div class="hero-actions">
+          <a class="btn btn-primary press" href="wiki/getting-started.html">
+            Get started
+            <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>
+          </a>
+          <a class="btn btn-ghost press" href="wiki/index.html">
+            <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 7v14"/><path d="M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3z"/></svg>
+            Read the docs
+          </a>
+        </div>
+        <div class="bars" data-bars="56" data-lit="24,25,26,27,28,29,30,31" aria-hidden="true"></div>
+        <p class="hero-note">OPUS&nbsp;·&nbsp;FLAC&nbsp;·&nbsp;WAV&nbsp;·&nbsp;ALAC — served byte-for-byte, no transcoding</p>
+      </div>
+    </section>
+
+    <section class="section-tight">
+      <div class="shell">
+        <div class="facts" data-stagger>
+          <div class="fact reveal-item">
+            <h3>No transcoding</h3>
+            <p>Files stream exactly as uploaded. What an artist renders is what a listener gets.</p>
+          </div>
+          <div class="fact reveal-item">
+            <h3>Hi-Res ready</h3>
+            <p>Lossless audio up to 192&nbsp;kHz / 24-bit, tagged automatically from the file itself.</p>
+          </div>
+          <div class="fact reveal-item">
+            <h3>Zero external DB</h3>
+            <p>SQLite through built-in <b>node:sqlite</b> — one process, one port, no services to babysit.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section" id="features">
+      <div class="shell">
+        <div class="section-head">
+          <h2>Everything a listening community needs.</h2>
+          <p>Eight primitives that cover the whole loop — upload, review, listen, download — with nothing you have to switch off.</p>
+        </div>
+        <div class="feature-grid" data-stagger>
+          <div class="feature-cell reveal-item">
+            <span class="icon-tile"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg></span>
+            <h3>Animated player</h3>
+            <p>Queue, seek, volume and smooth track transitions in a strict monochrome UI.</p>
+          </div>
+          <div class="feature-cell reveal-item">
+            <span class="icon-tile"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m7 10 5 5 5-5"/><path d="M12 15V3"/></svg></span>
+            <h3>Free downloads</h3>
+            <p>Opus tracks for everyone; lossless FLAC/WAV/ALAC reserved for Supporters.</p>
+          </div>
+          <div class="feature-cell reveal-item">
+            <span class="icon-tile"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 4h-7M10 4H3M21 12h-9M8 12H3M21 20h-5M12 20H3"/><path d="M14 2v4M8 10v4M16 18v4"/></svg></span>
+            <h3>Auto-metadata</h3>
+            <p>Title, artist, cover, bitrate and sample rate parsed from tags on upload.</p>
+          </div>
+          <div class="feature-cell reveal-item">
+            <span class="icon-tile"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/><path d="m9 12 2 2 4-4"/></svg></span>
+            <h3>Community moderation</h3>
+            <p>Every upload passes human review — verify, reject or suspend — before the feed.</p>
+          </div>
+          <div class="feature-cell reveal-item">
+            <span class="icon-tile"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg></span>
+            <h3>Notification center</h3>
+            <p>Status changes land in the bell with a reason attached. Nobody guesses.</p>
+          </div>
+          <div class="feature-cell reveal-item">
+            <span class="icon-tile"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"/></svg></span>
+            <h3>Roles &amp; Supporter</h3>
+            <p>Owner, admin and user roles, plus a Supporter badge that unlocks lossless.</p>
+          </div>
+          <div class="feature-cell reveal-item">
+            <span class="icon-tile"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m4 17 6-6-6-6"/><path d="M12 19h8"/></svg></span>
+            <h3>Admin CLI</h3>
+            <p>Backups, role changes, secret rotation, orphan cleanup — all scriptable.</p>
+          </div>
+          <div class="feature-cell reveal-item">
+            <span class="icon-tile"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="11" x="3" y="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg></span>
+            <h3>Hardened by default</h3>
+            <p>Magic-byte validation, rate limits, brute-force locks, httpOnly JWT cookies.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section" id="moderation">
+      <div class="shell">
+        <div class="section-head">
+          <h2>Uploads meet human review.</h2>
+          <p>Nothing auto-publishes. A track becomes public only after a moderator looks at it — and every decision comes with a notification.</p>
+        </div>
+        <div class="steps" data-stagger>
+          <div class="step reveal-item">
+            <span class="step-num">01</span>
+            <h3>Upload</h3>
+            <p>A user drops an Opus or lossless file. Metadata and cover fill themselves in.</p>
+          </div>
+          <div class="step reveal-item">
+            <span class="step-num">02</span>
+            <h3>Pending</h3>
+            <p>The track enters the queue, visible to its author under My uploads.</p>
+          </div>
+          <div class="step reveal-item">
+            <span class="step-num">03</span>
+            <h3>Review</h3>
+            <p>Moderators verify, reject with a written reason, or suspend temporarily.</p>
+          </div>
+          <div class="step reveal-item">
+            <span class="step-num">04</span>
+            <h3>Live</h3>
+            <p>Verified tracks hit the feed and search; the uploader is notified instantly.</p>
+          </div>
+        </div>
+        <p style="margin-top:32px;font-size:14px;color:var(--text-3);max-width:640px;">Owners confirm deletions requested by moderators — nothing disappears silently.</p>
+      </div>
+    </section>
+
+    <section class="section" id="quality">
+      <div class="shell split">
+        <div>
+          <div class="section-head">
+            <h2>Quality you can read at a glance.</h2>
+            <p>Every card shows its exact technical profile — sample rate, bit depth, bitrate — sorted into three honest categories.</p>
+          </div>
+          <ul class="checklist">
+            <li><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg><span><strong>Hi-Res</strong> — lossless, 24-bit, 44.1–192&nbsp;kHz</span></li>
+            <li><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg><span><strong>Hi-Fi / CD quality</strong> — lossless, 16-bit, 44.1&nbsp;kHz+</span></li>
+            <li><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg><span><strong>Standard / HQ</strong> — everything else, still served untouched</span></li>
+          </ul>
+        </div>
+        <table class="docs-table">
+          <thead>
+            <tr><th>Category</th><th>Source</th><th>Spec</th></tr>
+          </thead>
+          <tbody>
+            <tr><td><strong>Hi-Res</strong></td><td>Lossless</td><td>24-bit · 44.1–192&nbsp;kHz</td></tr>
+            <tr><td><strong>Hi-Fi</strong></td><td>Lossless</td><td>16-bit · 44.1+&nbsp;kHz</td></tr>
+            <tr><td><strong>Standard / HQ</strong></td><td>Opus</td><td>any bitrate</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="section" id="selfhost">
+      <div class="shell split">
+        <div>
+          <div class="section-head">
+            <h2>Own your stack in three commands.</h2>
+            <p>No Postgres to migrate to, no Redis to babysit. State is one SQLite file and one uploads folder — copy them and you are backed up.</p>
+          </div>
+          <ul class="checklist">
+            <li><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg><span>Node.js 22.5+ (Node 24 recommended)</span></li>
+            <li><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg><span>Docker Compose and Kubernetes manifests included</span></li>
+            <li><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg><span>systemd service via <code class="inline">./open-audio install --service</code></span></li>
+          </ul>
+          <div class="hero-actions" style="margin-top:28px;">
+            <a class="btn btn-ghost btn-sm press" href="wiki/deployment.html">
+              Deployment guide
+              <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>
+            </a>
+          </div>
+        </div>
+        <div class="term" id="cmd-quickstart">
+          <div class="term-bar">
+            <span>open-audio — quick start</span>
+            <button class="copy-btn press" type="button" data-copy-source="cmd-quickstart">
+              <span class="when-idle" style="display:inline-flex;align-items:center;gap:6px;"><svg class="ic" style="width:13px;height:13px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="14" height="14" x="8" y="8" rx="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>Copy</span>
+              <span class="when-copied" style="display:inline-flex;align-items:center;gap:6px;"><svg class="ic" style="width:13px;height:13px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>Copied</span>
+            </button>
+          </div>
+          <pre><code><span class="code-prompt">$ </span>npm run setup            <span class="code-comment"># deps + .env + SQLite + owner account</span>
+<span class="code-prompt">$ </span>npm run dev              <span class="code-comment"># API :4000 · web :3000</span>
+<span class="code-prompt">$ </span>npm run build &amp;&amp; npm start   <span class="code-comment"># production on :4000</span></code></pre>
+        </div>
+      </div>
+    </section>
+
+    <section class="section-tight">
+      <div class="shell">
+        <p class="stack-line">React 19<span>·</span>Vite<span>·</span>Tailwind CSS 4<span>·</span>Express<span>·</span>node:sqlite<span>·</span>motion<span>·</span>lucide-react</p>
+      </div>
+    </section>
+
+    <section class="section cta-band">
+      <div class="shell">
+        <h2>Your library. Your rules.</h2>
+        <p>Spin up an instance for your crew tonight — the first upload can be verified within minutes.</p>
+        <div class="hero-actions" style="margin-top:0;">
+          <a class="btn btn-primary press" href="wiki/getting-started.html">
+            Get started
+            <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>
+          </a>
+          <a class="btn btn-ghost press" href="https://github.com/SparkleSavvy/Open-Audio">
+            <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 22v-4a4.8 4.8 0 0 0-1-3.5c3 0 6-2 6-5.5.08-1.25-.27-2.48-1-3.5.28-1.15.28-2.35 0-3.5 0 0-1 0-3 1.5-2.64-.5-5.36-.5-8 0C6 2 5 2 5 2c-.3 1.15-.3 2.35 0 3.5A5.403 5.403 0 0 0 4 9c0 3.5 3 5.5 6 5.5-.39.49-.68 1.05-.85 1.65-.17.6-.22 1.23-.15 1.85v4"/><path d="M9 18c-4.51 2-5-2-7-2"/></svg>
+            View source
+          </a>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <footer class="site-footer">
+    <div class="shell">
+      <div class="footer-grid">
+        <div class="f-brand">
+          <a class="brand press" href="index.html">
+            <span class="brand-mark" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M2 10v3M6 6v11M10 3v18M14 8v7M18 5v13M22 10v3"/></svg>
+            </span>
+            <span class="brand-name">OPEN&nbsp;AUDIO</span>
+          </a>
+          <p>A minimalist music service with a dark monochrome look. Uploads, downloads, and community-driven moderation.</p>
+        </div>
+        <div class="f-col">
+          <h4>Project</h4>
+          <a href="#features">Features</a>
+          <a href="#moderation">Moderation</a>
+          <a href="#selfhost">Self-host</a>
+          <a href="https://github.com/SparkleSavvy/Open-Audio">GitHub</a>
+        </div>
+        <div class="f-col">
+          <h4>Documentation</h4>
+          <a href="wiki/index.html">Overview</a>
+          <a href="wiki/getting-started.html">Getting started</a>
+          <a href="wiki/api-reference.html">API reference</a>
+          <a href="wiki/deployment.html">Deployment</a>
+        </div>
+      </div>
+      <div class="f-meta">
+        <span>© <span data-year>2026</span> Open Audio contributors · MIT License</span>
+        <span>Static site — no trackers, no analytics</span>
+      </div>
+    </div>
+  </footer>
+
+  <script src="assets/js/main.js"></script>
+</body>
+</html>

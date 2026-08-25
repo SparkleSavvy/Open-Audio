@@ -1,0 +1,211 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="Environment variables, Docker Compose, Kubernetes manifests, scaling limits and the open-audio management utility." />
+  <link rel="icon" type="image/svg+xml" href="../assets/favicon.svg" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400..700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="../assets/css/main.css" />
+  <title>Deployment — Open Audio Docs</title>
+</head>
+<body>
+
+  <header class="site-header">
+    <div class="shell header-inner">
+      <a class="brand press" href="../index.html">
+          <span class="brand-mark" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M2 10v3M6 6v11M10 3v18M14 8v7M18 5v13M22 10v3"/></svg>
+          </span>
+        <span class="brand-name">OPEN&nbsp;AUDIO</span>
+      </a>
+      <nav class="nav-desktop" aria-label="Main">
+        <a class="nav-link press" href="../index.html">Home</a>
+        <a class="nav-link press active" href="index.html">Docs</a>
+        <a class="nav-link press" href="https://github.com/SparkleSavvy/Open-Audio" aria-label="GitHub repository"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 22v-4a4.8 4.8 0 0 0-1-3.5c3 0 6-2 6-5.5.08-1.25-.27-2.48-1-3.5.28-1.15.28-2.35 0-3.5 0 0-1 0-3 1.5-2.64-.5-5.36-.5-8 0C6 2 5 2 5 2c-.3 1.15-.3 2.35 0 3.5A5.403 5.403 0 0 0 4 9c0 3.5 3 5.5 6 5.5-.39.49-.68 1.05-.85 1.65-.17.6-.22 1.23-.15 1.85v4"/><path d="M9 18c-4.51 2-5-2-7-2"/></svg></a>
+      </nav>
+      <button class="menu-btn press" type="button" aria-expanded="false" aria-controls="mobile-nav" aria-label="Toggle navigation">
+        <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 6h16M4 12h16M4 18h16"/></svg>
+      </button>
+    </div>
+    <div id="mobile-nav" class="mobile-nav">
+      <a href="../index.html">Home</a>
+      <a class="active" href="index.html">Docs</a>
+      <a href="https://github.com/SparkleSavvy/Open-Audio">GitHub</a>
+    </div>
+  </header>
+
+  <main class="shell wiki-layout">
+
+    <aside>
+      <details class="sidebar-nav" open>
+        <summary>Browse docs</summary>
+        <div class="side-group">
+          <p class="side-label">Introduction</p>
+          <a class="side-link" href="index.html">Overview</a>
+          <a class="side-link" href="getting-started.html">Getting started</a>
+        </div>
+        <div class="side-group">
+          <p class="side-label">Using Open Audio</p>
+          <a class="side-link" href="features.html">Features</a>
+          <a class="side-link" href="uploads-and-formats.html">Uploads &amp; formats</a>
+          <a class="side-link" href="moderation-and-roles.html">Moderation &amp; roles</a>
+          <a class="side-link" href="supporter.html">Supporter</a>
+        </div>
+        <div class="side-group">
+          <p class="side-label">Administration</p>
+          <a class="side-link" href="admin-cli.html">Admin CLI</a>
+          <a class="side-link" href="security.html">Security</a>
+        </div>
+        <div class="side-group">
+          <p class="side-label">Reference</p>
+          <a class="side-link active" href="deployment.html">Deployment</a>
+          <a class="side-link" href="api-reference.html">API reference</a>
+          <a class="side-link" href="faq.html">FAQ</a>
+        </div>
+      </details>
+    </aside>
+
+    <article>
+      <nav class="crumb" aria-label="Breadcrumb">
+        <a href="index.html">Docs</a><i>/</i><span>Reference</span><i>/</i><span aria-current="page">Deployment</span>
+      </nav>
+      <h1 class="page-title">Deployment guide</h1>
+      <p class="page-sub">One process, two volumes. Everything you need to run Open Audio outside your laptop.</p>
+
+      <div class="prose">
+
+        <h2>Topology</h2>
+        <p>A single Node process serves the built SPA, the REST API and uploaded files from port <strong>:4000</strong>. State lives in exactly two places, both of which belong on a persistent volume:</p>
+        <ul>
+          <li><strong>SQLite database</strong> (<code class="inline">DATABASE_PATH</code>, WAL mode) — one writer only.</li>
+          <li><strong>Uploaded media</strong> (<code class="inline">UPLOAD_DIR</code>).</li>
+        </ul>
+        <p><code class="inline">GET /api/health</code> is provided for container probes.</p>
+
+        <h2>Environment</h2>
+        <table class="docs-table">
+          <thead><tr><th>Variable</th><th>Notes</th></tr></thead>
+          <tbody>
+            <tr><td><code class="inline">NODE_ENV</code></td><td>set to production (refuses weak JWT_SECRET otherwise)</td></tr>
+            <tr><td><code class="inline">JWT_SECRET</code></td><td>&ge;16 chars; shared by all replicas; rotates sessions</td></tr>
+            <tr><td><code class="inline">REMOVAL_KEY</code></td><td>required for the removal flow; openssl rand</td></tr>
+            <tr><td><code class="inline">DATABASE_PATH</code></td><td>inside the persistent volume</td></tr>
+            <tr><td><code class="inline">UPLOAD_DIR</code></td><td>inside the persistent volume</td></tr>
+            <tr><td><code class="inline">COOKIE_SECURE</code></td><td>1 behind HTTPS</td></tr>
+            <tr><td><code class="inline">TRUST_PROXY</code></td><td>1 behind a load balancer / Ingress</td></tr>
+            <tr><td><code class="inline">HELMET_CSP</code></td><td>1 enables strict CSP + HSTS</td></tr>
+            <tr><td><code class="inline">OWNER_*</code></td><td>owner account provisioned idempotently on boot</td></tr>
+          </tbody>
+        </table>
+        <p>In containers these values win over any persisted <code class="inline">.env</code>, so every replica sees the same secrets.</p>
+
+        <h2>Docker (single host)</h2>
+
+        <div class="term" id="cmd-docker">
+          <div class="term-bar">
+            <span>docker compose</span>
+            <button class="copy-btn press" type="button" data-copy-source="cmd-docker">
+              <span class="when-idle" style="display:inline-flex;align-items:center;gap:6px;"><svg class="ic" style="width:13px;height:13px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="14" height="14" x="8" y="8" rx="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>Copy</span>
+              <span class="when-copied" style="display:inline-flex;align-items:center;gap:6px;"><svg class="ic" style="width:13px;height:13px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>Copied</span>
+            </button>
+          </div>
+          <pre><code>$ cp .env.example .env    <span class="code-comment"># set JWT_SECRET, REMOVAL_KEY, OWNER_PASSWORD</span>
+$ docker compose up -d --build
+<span class="code-comment"># -> http://localhost:4000</span></code></pre>
+        </div>
+        <p>The <code class="inline">sparkle-data</code> volume holds the database and uploads; the image builds on <code class="inline">node:24</code>.</p>
+
+        <h2>Kubernetes</h2>
+        <p>Manifests live in <code class="inline">k8s/</code>: namespace, configmap, secret, PVC, deployment, service, ingress. Secrets are not committed — create the Secret first:</p>
+
+        <div class="term" id="cmd-k8s">
+          <div class="term-bar">
+            <span>kubectl</span>
+            <button class="copy-btn press" type="button" data-copy-source="cmd-k8s">
+              <span class="when-idle" style="display:inline-flex;align-items:center;gap:6px;"><svg class="ic" style="width:13px;height:13px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="14" height="14" x="8" y="8" rx="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>Copy</span>
+              <span class="when-copied" style="display:inline-flex;align-items:center;gap:6px;"><svg class="ic" style="width:13px;height:13px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>Copied</span>
+            </button>
+          </div>
+          <pre><code>kubectl apply -f k8s/namespace.yaml
+
+kubectl -n sparkle-audio create secret generic sparkle-audio \
+  --from-literal=JWT_SECRET=$(openssl rand -hex 32) \
+  --from-literal=REMOVAL_KEY=$(openssl rand -base64 24) \
+  --from-literal=OWNER_PASSWORD=$(openssl rand -base64 18) \
+  --from-literal=OWNER_EMAIL=owner@example.com
+
+kubectl apply -f k8s/ -n sparkle-audio</code></pre>
+        </div>
+        <p>The Deployment runs <strong>one replica</strong> with a ReadWriteOnce PVC, probes on <code class="inline">/api/health</code>, and an nginx Ingress raised to a 64&nbsp;MB body limit (tracks reach 60&nbsp;MB). The container entrypoint runs non-interactive setup from env, then starts the server.</p>
+
+        <h2>Scaling limits</h2>
+        <ul>
+          <li><strong>Database</strong> — SQLite allows a single writer; horizontal scale means moving to Postgres.</li>
+          <li><strong>Uploads</strong> — local disk; shared volumes need sticky sessions.</li>
+          <li><strong>Rate limiting</strong> — the limiter and brute-force maps are in-process; behind N pods limits are per-pod, not global (swap in Redis).</li>
+        </ul>
+        <div class="note"><strong>Run replicas: 1</strong> and scale the node vertically until one of the above is replaced.</div>
+
+        <h2>The open-audio utility</h2>
+        <p>The system-level companion script handles service, volumes and env for native or Docker modes:</p>
+        <table class="docs-table">
+          <tbody>
+            <tr><td><code class="inline">install [--service]</code></td><td>deps + owner (native) or build+run (docker); systemd unit with --service</td></tr>
+            <tr><td><code class="inline">start / stop / restart</code></td><td>control the instance</td></tr>
+            <tr><td><code class="inline">status / health / logs [-f]</code></td><td>state, probe, journalctl/docker/file logs</td></tr>
+            <tr><td><code class="inline">config list|get|set|edit|secret</code></td><td>manage .env (masked; restarts on change)</td></tr>
+            <tr><td><code class="inline">update</code></td><td>pull + reinstall/rebuild + restart</td></tr>
+            <tr><td><code class="inline">backup [dir] / restore &lt;dir&gt;</code></td><td>snapshot via the admin CLI</td></tr>
+            <tr><td><code class="inline">mode native|docker</code></td><td>switch deployment mode (persisted)</td></tr>
+            <tr><td><code class="inline">uninstall [--purge]</code></td><td>stop + remove; --purge wipes data</td></tr>
+            <tr><td><code class="inline">remove [--yes] [reason]</code></td><td>app-level removal flow (confirmed in UI)</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <nav class="pager" aria-label="Pagination">
+        <a class="prev" href="security.html"><span class="dir">Previous</span><span class="target">Security</span></a>
+        <a class="next" href="api-reference.html"><span class="dir">Next</span><span class="target">API reference</span></a>
+      </nav>
+    </article>
+
+  </main>
+
+  <footer class="site-footer">
+    <div class="shell">
+      <div class="footer-grid">
+        <div class="f-brand">
+          <a class="brand press" href="../index.html">
+          <span class="brand-mark" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M2 10v3M6 6v11M10 3v18M14 8v7M18 5v13M22 10v3"/></svg>
+          </span>
+            <span class="brand-name">OPEN&nbsp;AUDIO</span>
+          </a>
+          <p>A minimalist music service with a dark monochrome look. Uploads, downloads, and community-driven moderation.</p>
+        </div>
+        <div class="f-col">
+          <h4>Project</h4>
+          <a href="../index.html">Home</a>
+          <a href="https://github.com/SparkleSavvy/Open-Audio">GitHub</a>
+        </div>
+        <div class="f-col">
+          <h4>Documentation</h4>
+          <a href="index.html">Overview</a>
+          <a href="getting-started.html">Getting started</a>
+          <a href="api-reference.html">API reference</a>
+          <a href="deployment.html">Deployment</a>
+        </div>
+      </div>
+      <div class="f-meta">
+        <span>&copy; <span data-year>2026</span> Open Audio contributors &middot; MIT License</span>
+        <span>Static site &mdash; no trackers, no analytics</span>
+      </div>
+    </div>
+  </footer>
+
+  <script src="../assets/js/main.js"></script>
+</body>
+</html>

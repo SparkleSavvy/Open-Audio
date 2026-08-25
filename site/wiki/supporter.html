@@ -1,0 +1,147 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="The Supporter badge: who grants it, what it unlocks, and how revocation works." />
+  <link rel="icon" type="image/svg+xml" href="../assets/favicon.svg" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400..700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="../assets/css/main.css" />
+  <title>Supporter — Open Audio Docs</title>
+</head>
+<body>
+
+  <header class="site-header">
+    <div class="shell header-inner">
+      <a class="brand press" href="../index.html">
+          <span class="brand-mark" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M2 10v3M6 6v11M10 3v18M14 8v7M18 5v13M22 10v3"/></svg>
+          </span>
+        <span class="brand-name">OPEN&nbsp;AUDIO</span>
+      </a>
+      <nav class="nav-desktop" aria-label="Main">
+        <a class="nav-link press" href="../index.html">Home</a>
+        <a class="nav-link press active" href="index.html">Docs</a>
+        <a class="nav-link press" href="https://github.com/SparkleSavvy/Open-Audio" aria-label="GitHub repository"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 22v-4a4.8 4.8 0 0 0-1-3.5c3 0 6-2 6-5.5.08-1.25-.27-2.48-1-3.5.28-1.15.28-2.35 0-3.5 0 0-1 0-3 1.5-2.64-.5-5.36-.5-8 0C6 2 5 2 5 2c-.3 1.15-.3 2.35 0 3.5A5.403 5.403 0 0 0 4 9c0 3.5 3 5.5 6 5.5-.39.49-.68 1.05-.85 1.65-.17.6-.22 1.23-.15 1.85v4"/><path d="M9 18c-4.51 2-5-2-7-2"/></svg></a>
+      </nav>
+      <button class="menu-btn press" type="button" aria-expanded="false" aria-controls="mobile-nav" aria-label="Toggle navigation">
+        <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 6h16M4 12h16M4 18h16"/></svg>
+      </button>
+    </div>
+    <div id="mobile-nav" class="mobile-nav">
+      <a href="../index.html">Home</a>
+      <a class="active" href="index.html">Docs</a>
+      <a href="https://github.com/SparkleSavvy/Open-Audio">GitHub</a>
+    </div>
+  </header>
+
+  <main class="shell wiki-layout">
+
+    <aside>
+      <details class="sidebar-nav" open>
+        <summary>Browse docs</summary>
+        <div class="side-group">
+          <p class="side-label">Introduction</p>
+          <a class="side-link" href="index.html">Overview</a>
+          <a class="side-link" href="getting-started.html">Getting started</a>
+        </div>
+        <div class="side-group">
+          <p class="side-label">Using Open Audio</p>
+          <a class="side-link" href="features.html">Features</a>
+          <a class="side-link" href="uploads-and-formats.html">Uploads &amp; formats</a>
+          <a class="side-link" href="moderation-and-roles.html">Moderation &amp; roles</a>
+          <a class="side-link active" href="supporter.html">Supporter</a>
+        </div>
+        <div class="side-group">
+          <p class="side-label">Administration</p>
+          <a class="side-link" href="admin-cli.html">Admin CLI</a>
+          <a class="side-link" href="security.html">Security</a>
+        </div>
+        <div class="side-group">
+          <p class="side-label">Reference</p>
+          <a class="side-link" href="deployment.html">Deployment</a>
+          <a class="side-link" href="api-reference.html">API reference</a>
+          <a class="side-link" href="faq.html">FAQ</a>
+        </div>
+      </details>
+    </aside>
+
+    <article>
+      <nav class="crumb" aria-label="Breadcrumb">
+        <a href="index.html">Docs</a><i>/</i><span>Using Open Audio</span><i>/</i><span aria-current="page">Supporter</span>
+      </nav>
+      <h1 class="page-title">Supporter badge &amp; lossless access</h1>
+      <p class="page-sub">One badge, one privilege: downloading lossless audio.</p>
+
+      <div class="prose">
+
+        <p>The Supporter badge marks people who back the project. In the UI it appears as a small heart pill next to the username, and it carries exactly one superpower: <strong>downloading lossless tracks</strong> (FLAC/WAV/ALAC). Everyone else keeps free Opus downloads — the badge gates fidelity, not participation.</p>
+
+        <h2>Granting</h2>
+        <p>Only the <code class="inline">owner</code> can grant or revoke the badge:</p>
+        <ul>
+          <li><strong>Admin panel</strong> — Users tab, toggle on the user row.</li>
+          <li><strong>CLI</strong> — <code class="inline">npm run admin user &lt;id&gt; supporter on|off</code></li>
+        </ul>
+
+        <div class="term" id="cmd-supporter">
+          <div class="term-bar">
+            <span>grant supporter</span>
+            <button class="copy-btn press" type="button" data-copy-source="cmd-supporter">
+              <span class="when-idle" style="display:inline-flex;align-items:center;gap:6px;"><svg class="ic" style="width:13px;height:13px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="14" height="14" x="8" y="8" rx="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>Copy</span>
+              <span class="when-copied" style="display:inline-flex;align-items:center;gap:6px;"><svg class="ic" style="width:13px;height:13px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>Copied</span>
+            </button>
+          </div>
+          <pre><code>$ npm run admin user 42 supporter on   <span class="code-comment"># grant</span>
+$ npm run admin user 42 supporter off  <span class="code-comment"># revoke</span></code></pre>
+        </div>
+
+        <h2>How enforcement works</h2>
+        <p>The download endpoint re-checks the badge live on every request — revoking it takes effect immediately, no cached URLs survive. Playback is never restricted: supporters get files, everyone gets music.</p>
+      </div>
+
+      <nav class="pager" aria-label="Pagination">
+        <a class="prev" href="moderation-and-roles.html"><span class="dir">Previous</span><span class="target">Moderation & roles</span></a>
+        <a class="next" href="admin-cli.html"><span class="dir">Next</span><span class="target">Admin CLI</span></a>
+      </nav>
+    </article>
+
+  </main>
+
+  <footer class="site-footer">
+    <div class="shell">
+      <div class="footer-grid">
+        <div class="f-brand">
+          <a class="brand press" href="../index.html">
+          <span class="brand-mark" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M2 10v3M6 6v11M10 3v18M14 8v7M18 5v13M22 10v3"/></svg>
+          </span>
+            <span class="brand-name">OPEN&nbsp;AUDIO</span>
+          </a>
+          <p>A minimalist music service with a dark monochrome look. Uploads, downloads, and community-driven moderation.</p>
+        </div>
+        <div class="f-col">
+          <h4>Project</h4>
+          <a href="../index.html">Home</a>
+          <a href="https://github.com/SparkleSavvy/Open-Audio">GitHub</a>
+        </div>
+        <div class="f-col">
+          <h4>Documentation</h4>
+          <a href="index.html">Overview</a>
+          <a href="getting-started.html">Getting started</a>
+          <a href="api-reference.html">API reference</a>
+          <a href="deployment.html">Deployment</a>
+        </div>
+      </div>
+      <div class="f-meta">
+        <span>&copy; <span data-year>2026</span> Open Audio contributors &middot; MIT License</span>
+        <span>Static site &mdash; no trackers, no analytics</span>
+      </div>
+    </div>
+  </footer>
+
+  <script src="../assets/js/main.js"></script>
+</body>
+</html>
